@@ -1,6 +1,6 @@
 # AGENTS.md — AI Frontier Tracker
 
-本文件面向在本仓库中工作的自动化代理与人类协作者，概括入口与约定。**完整架构方案**（分层、数据流、扩展点、权衡）见 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)。
+本文件面向在本仓库中工作的自动化代理与人类协作者，概括入口与约定。**完整架构方案**见 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)；**开源贡献与安全披露**分别见 [CONTRIBUTING.md](./CONTRIBUTING.md)、[SECURITY.md](./SECURITY.md)。
 
 ## 项目在做什么
 

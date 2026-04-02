@@ -4,6 +4,7 @@ __pycache__/
 .Python
 .DS_Store
 .windsurf/
+.ruff_cache/
 
 # Local secrets & env
 .env

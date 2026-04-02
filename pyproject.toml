@@ -1,0 +1,29 @@
+# Project metadata for tooling & discovery; install runtime deps with: pip install -r requirements.txt
+[project]
+name = "ai-frontier-tracker"
+version = "2.0.0"
+description = "Self-hosted aggregator for AI frontier signals (papers, blogs, communities)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = ["fastapi", "arxiv", "rss", "machine-learning", "aggregator"]
+
+[[project.authors]]
+name = "AI Frontier Tracker contributors"
+
+[project.urls]
+Homepage = "https://github.com/liogogogo/ai-frontier-tracker"
+Repository = "https://github.com/liogogogo/ai-frontier-tracker"
+Issues = "https://github.com/liogogogo/ai-frontier-tracker/issues"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# load_dotenv() must run before app imports
+"app/main.py" = ["E402"]

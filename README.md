@@ -1,5 +1,8 @@
 # AI Frontier Tracker
 
+[![CI](https://github.com/liogogogo/ai-frontier-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/liogogogo/ai-frontier-tracker/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Self-hosted aggregator for the AI frontier** — 把**大模型相关的前沿论文、工程实践与社区讨论**收拢到一处，核心用途是辅助**挖掘未来有潜力的 AI 项目与方向**（早期技术/产品线索）；并配套**轻量分析**（词频、趋势、Feed 洞察），对齐**最活跃从业者**在公开渠道上押注什么、试什么。
 
 数据来自大厂博客与 RSS、Hacker News、Reddit、Lobsters、arXiv、GitHub 等；经去重、热度与调度合并；可选 LLM 中文周评与 Firecrawl 正文增强。系统不代替你思考，但减少「漏掉主线」的概率。
@@ -88,10 +91,14 @@ docker run --rm -p 8000:8000 -v ai_news_data:/app/data ai-frontier-tracker
 | GET  | `/api/scrape`              | 单 URL 抓取          |
 | POST | `/api/summarize`           | LLM 摘要             |
 
-## 参与贡献
+## 社区与治理
 
-Issue / PR 欢迎：新数据源请走 `app/fetchers/` 并更新 `app/config.py` 中对应 `FetcherConfig`；变更 API 或存储时同步 `schema_version`。
+- [贡献指南](CONTRIBUTING.md) — 环境、PR 约定、新数据源 checklist  
+- [行为准则](CODE_OF_CONDUCT.md) — Contributor Covenant  
+- [安全披露](SECURITY.md) — 请勿在公开 Issue 中提交漏洞  
+
+Issue / PR 欢迎。要点：新数据源请走 `app/fetchers/` 并更新 `app/config.py` 中对应 `FetcherConfig`；变更 API 或存储时同步 `schema_version`。
 
 ## 许可
 
-[MIT License](./LICENSE)
+[MIT License](LICENSE)
