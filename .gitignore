@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.Python
+.DS_Store
+.windsurf/
+
+# Local secrets & env
+.env
+.env.local
+.env.*.local
+
+# Runtime / local data (keep directory via data/.gitkeep)
+data/*.db
+*.log
+server.log

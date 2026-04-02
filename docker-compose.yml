@@ -1,0 +1,22 @@
+# 项目根目录的 .env 会被 Compose 自动加载（用于变量替换）。
+# 首次可: cp .env.example .env ，再编辑 API Key。
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/ai_news.db}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      MODELVERSE_API_KEY: ${MODELVERSE_API_KEY:-}
+      MODELVERSE_MODEL: ${MODELVERSE_MODEL:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+    volumes:
+      - ai_news_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  ai_news_data:

@@ -1,0 +1,163 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.app { padding: 1rem 0; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 12px; }
+.title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+.subtitle { font-size: 13px; color: var(--color-text-secondary); margin-top: 3px; }
+.tabs { display: flex; gap: 4px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 3px; }
+.tab { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--color-text-secondary); transition: all 0.15s; }
+.tab.active { background: var(--color-background-primary); color: var(--color-text-primary); font-weight: 500; border: 0.5px solid var(--color-border-tertiary); }
+.filters { display: flex; gap: 8px; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+.filter-chip { padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-secondary); transition: all 0.15s; }
+.filter-chip.active { background: #E6F1FB; color: #185FA5; border-color: #85B7EB; }
+.filter-chip:hover { border-color: var(--color-border-primary); color: var(--color-text-primary); }
+.search-box { flex: 1; min-width: 180px; max-width: 280px; padding: 6px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); font-size: 13px; font-family: var(--font-sans); }
+.search-box:focus { outline: none; border-color: var(--color-border-primary); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; cursor: pointer; transition: border-color 0.15s; }
+.card:hover { border-color: var(--color-border-primary); }
+.card-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+.badge-paper { background: #E1F5EE; color: #0F6E56; }
+.badge-news { background: #E6F1FB; color: #185FA5; }
+.badge-repo { background: #FAEEDA; color: #854F0B; }
+.badge-blog { background: #EEEDFE; color: #534AB7; }
+.date-label { font-size: 11px; color: var(--color-text-tertiary); margin-left: auto; }
+.card-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); line-height: 1.4; margin-bottom: 8px; }
+.card-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+.card-footer { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 0.5px solid var(--color-border-tertiary); flex-wrap: wrap; }
+.tag { padding: 2px 8px; border-radius: 10px; font-size: 11px; background: var(--color-background-secondary); color: var(--color-text-secondary); }
+.btn-fetch { margin-left: auto; padding: 5px 14px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-primary); font-size: 12px; cursor: pointer; font-family: var(--font-sans); transition: background 0.15s; }
+.btn-fetch:hover { background: var(--color-background-secondary); }
+.fetch-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); margin-bottom: 1.25rem; border: 0.5px solid var(--color-border-tertiary); }
+.fetch-status { font-size: 12px; color: var(--color-text-secondary); flex: 1; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.ask-btn { padding: 6px 16px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); font-size: 12px; cursor: pointer; font-family: var(--font-sans); }
+.ask-btn:hover { background: var(--color-background-secondary); }
+.empty { text-align: center; padding: 3rem 1rem; color: var(--color-text-tertiary); font-size: 14px; }
+.count-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 1rem; }
+</style>
+
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="title">AI 前沿追踪</div>
+      <div class="subtitle">顶会论文 · 工程实践 · 模型动态</div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('all', this)">全部</button>
+      <button class="tab" onclick="switchTab('paper', this)">论文</button>
+      <button class="tab" onclick="switchTab('news', this)">资讯</button>
+      <button class="tab" onclick="switchTab('repo', this)">开源</button>
+    </div>
+  </div>
+
+  <div class="fetch-bar">
+    <div class="pulse"></div>
+    <div class="fetch-status" id="fetch-status">已加载本地数据库 · 点击"抓取最新"可联网获取实时内容</div>
+    <button class="ask-btn" onclick="sendPrompt('请帮我抓取并总结最新一周的 AI 大模型前沿论文和工程实践资讯，包括 arXiv、GitHub trending 和各大 AI 实验室博客')">抓取最新 ↗</button>
+  </div>
+
+  <div class="filters">
+    <input class="search-box" type="text" placeholder="搜索论文、模型、技术..." id="search-input" oninput="filterCards()" />
+    <button class="filter-chip active" onclick="toggleFilter('all', this)">全部</button>
+    <button class="filter-chip" onclick="toggleFilter('llm', this)">LLM</button>
+    <button class="filter-chip" onclick="toggleFilter('inference', this)">推理优化</button>
+    <button class="filter-chip" onclick="toggleFilter('rag', this)">RAG</button>
+    <button class="filter-chip" onclick="toggleFilter('agent', this)">Agent</button>
+    <button class="filter-chip" onclick="toggleFilter('multimodal', this)">多模态</button>
+    <button class="filter-chip" onclick="toggleFilter('training', this)">训练</button>
+  </div>
+
+  <div class="count-label" id="count-label">显示 12 条内容</div>
+
+  <div class="grid" id="card-grid"></div>
+</div>
+
+<script>
+const DATA = [
+  { type: 'paper', title: 'FlashAttention-3: Fast and Accurate Attention on H100 GPUs', desc: '利用异步流水线和 warp 专业化实现 H100 上 1.5–2× 加速，FP8 精度下峰值 FLOPS 利用率达 75%。', tags: ['inference', 'llm'], date: '2025-03', venue: 'arXiv', link: 'https://arxiv.org/abs/2407.08608' },
+  { type: 'paper', title: 'DeepSeek-V3 Technical Report', desc: '671B MoE 模型，仅用 2788 块 H800 GPU·天训练完成，引入无辅助损失负载均衡与 MTP 多 Token 预测目标。', tags: ['llm', 'training'], date: '2024-12', venue: 'arXiv', link: 'https://arxiv.org/abs/2412.19437' },
+  { type: 'paper', title: 'MegaScale: Scaling Large Language Model Training at Alibaba', desc: '万卡集群 LLM 训练系统，端到端 MFU 超过 55.2%，详解通信、显存与故障恢复工程实践。', tags: ['training', 'llm'], date: '2024-02', venue: 'NSDI 2024', link: 'https://arxiv.org/abs/2402.15627' },
+  { type: 'paper', title: 'Mixtral of Experts', desc: 'Mistral 发布 8×7B SMoE 架构，每 token 仅激活 2 个专家，推理成本等同 13B 稠密模型，性能超越 Llama 2 70B。', tags: ['llm', 'inference'], date: '2024-01', venue: 'arXiv', link: 'https://arxiv.org/abs/2401.04088' },
+  { type: 'paper', title: 'Chain-of-Thought Prompting Elicits Reasoning in Large Language Models', desc: '通过少样本 CoT 示例显著提升 LLM 在数学、推理任务上的表现，开启推理增强系列研究。', tags: ['llm', 'agent'], date: '2022-01', venue: 'NeurIPS 2022', link: 'https://arxiv.org/abs/2201.11903' },
+  { type: 'paper', title: 'RAG-Star: Enhancing Reasoning with Retrieval-Augmented Generation', desc: '将 MCTS 与 RAG 结合，在推理树搜索过程中动态检索外部知识，复杂问答性能大幅提升。', tags: ['rag', 'agent'], date: '2024-12', venue: 'arXiv', link: 'https://arxiv.org/abs/2501.02101' },
+  { type: 'news', title: 'Google 发布 Gemini 2.0 Flash Thinking Experimental', desc: '支持扩展思维模式，可处理复杂多步推理任务，API 已向开发者开放，延迟显著低于同类模型。', tags: ['llm', 'inference'], date: '2025-01', venue: 'Google Blog', link: 'https://blog.google/technology/google-deepmind/gemini-2-flash-thinking/' },
+  { type: 'news', title: 'Anthropic Claude 3.7 Sonnet 上线混合推理模式', desc: '业界首个在单一模型中融合标准响应与扩展思维的生产级模型，开发者可按需控制思考预算。', tags: ['llm', 'inference'], date: '2025-02', venue: 'Anthropic Blog', link: 'https://www.anthropic.com/news/claude-3-7-sonnet' },
+  { type: 'repo', title: 'vllm-project/vllm', desc: '高吞吐量 LLM 推理服务引擎，PagedAttention 内存管理 + 连续批处理，支持主流开源模型一键部署。', tags: ['inference', 'llm'], date: '2025-03', venue: 'GitHub', link: 'https://github.com/vllm-project/vllm' },
+  { type: 'repo', title: 'microsoft/DeepSpeed', desc: '大规模模型训练与推理优化库，ZeRO-3 显存卸载、MoE 支持、Inference Kernel 融合，持续更新。', tags: ['training', 'llm'], date: '2025-03', venue: 'GitHub', link: 'https://github.com/microsoft/DeepSpeed' },
+  { type: 'paper', title: 'LLaVA: Visual Instruction Tuning', desc: '将视觉编码器与 LLM 对齐的轻量范式，通过 GPT-4 生成的多模态指令数据微调，效果接近 GPT-4V。', tags: ['multimodal', 'llm'], date: '2023-04', venue: 'NeurIPS 2023', link: 'https://arxiv.org/abs/2304.08485' },
+  { type: 'repo', title: 'langchain-ai/langgraph', desc: 'Agent 工作流编排框架，基于图结构支持多 Agent 协作、循环与条件分支，内置持久化与流式输出。', tags: ['agent', 'rag'], date: '2025-03', venue: 'GitHub', link: 'https://github.com/langchain-ai/langgraph' },
+];
+
+let activeTab = 'all';
+let activeFilters = new Set(['all']);
+let searchQuery = '';
+
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderCards();
+}
+
+function toggleFilter(f, el) {
+  if (f === 'all') {
+    activeFilters.clear();
+    activeFilters.add('all');
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  } else {
+    activeFilters.delete('all');
+    document.querySelector('.filter-chip').classList.remove('active');
+    if (activeFilters.has(f)) { activeFilters.delete(f); el.classList.remove('active'); }
+    else { activeFilters.add(f); el.classList.add('active'); }
+    if (activeFilters.size === 0) { activeFilters.add('all'); document.querySelector('.filter-chip').classList.add('active'); }
+  }
+  renderCards();
+}
+
+function filterCards() {
+  searchQuery = document.getElementById('search-input').value.toLowerCase();
+  renderCards();
+}
+
+function badgeClass(type) {
+  return { paper: 'badge-paper', news: 'badge-news', repo: 'badge-repo', blog: 'badge-blog' }[type] || 'badge-paper';
+}
+function badgeLabel(type) {
+  return { paper: '论文', news: '资讯', repo: '开源', blog: '博客' }[type] || '论文';
+}
+
+function renderCards() {
+  const grid = document.getElementById('card-grid');
+  let items = DATA.filter(d => {
+    if (activeTab !== 'all' && d.type !== activeTab) return false;
+    if (!activeFilters.has('all') && !d.tags.some(t => activeFilters.has(t))) return false;
+    if (searchQuery && !d.title.toLowerCase().includes(searchQuery) && !d.desc.toLowerCase().includes(searchQuery)) return false;
+    return true;
+  });
+  document.getElementById('count-label').textContent = `显示 ${items.length} 条内容`;
+  if (items.length === 0) { grid.innerHTML = '<div class="empty">没有找到匹配内容</div>'; return; }
+  grid.innerHTML = items.map(d => `
+    <div class="card" onclick="openLink('${d.link}')">
+      <div class="card-meta">
+        <span class="badge ${badgeClass(d.type)}">${badgeLabel(d.type)}</span>
+        <span style="font-size:11px;color:var(--color-text-tertiary);">${d.venue}</span>
+        <span class="date-label">${d.date}</span>
+      </div>
+      <div class="card-title">${d.title}</div>
+      <div class="card-desc">${d.desc}</div>
+      <div class="card-footer">
+        ${d.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+        <button class="btn-fetch" onclick="event.stopPropagation();sendPrompt('请详细介绍论文/项目《${d.title}》的核心技术贡献、工程实现细节与实践价值')">深入解读 ↗</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+renderCards();
+</script>

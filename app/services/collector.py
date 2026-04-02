@@ -1,0 +1,473 @@
+"""
+数据收集协调器 - 统一管理所有抓取器
+"""
+import asyncio
+import json
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Tuple, Set
+
+from sqlmodel import select
+
+from ..fetchers import FetcherRegistry, FetchResult
+from ..utils.heat import finalize_heat
+from ..utils.bloom import get_deduplicator
+from ..services.cache import cache, DatabaseCache
+from ..services.scheduler import get_scheduler
+from ..database import get_session
+from ..models import Article
+from ..config import CONFIG
+
+
+class CollectorService:
+    """数据收集服务 - 集成 Bloom Filter + 自适应调度器"""
+    
+    def __init__(self):
+        self.registry = FetcherRegistry
+        self.db_cache = DatabaseCache()
+        self.dedup = get_deduplicator()  # Bloom Filter 去重器
+        self.scheduler = get_scheduler()  # 自适应调度器
+        self._initialized = False
+    
+    def _init_dedup_from_db(self):
+        """从数据库初始化 Bloom Filter（启动时一次性）"""
+        if self._initialized:
+            return
+        
+        try:
+            with get_session() as session:
+                # 加载最近 7 天的文章链接到过滤器
+                from datetime import timedelta
+                cutoff = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
+                stmt = select(Article.link).where(Article.date >= cutoff)
+                links = [row[0] for row in session.exec(stmt).all() if row[0]]
+                
+                # 批量加入 Bloom Filter
+                self.dedup.add_batch(links)
+                
+        except Exception:
+            pass  # 失败不影响运行
+        
+        self._initialized = True
+    
+    async def collect_all(self) -> Tuple[List[Dict], List[str]]:
+        """
+        并行收集所有数据源（集成 Bloom Filter + 自适应调度）
+        
+        Returns:
+            (items, errors): 抓取到的数据和错误信息
+        """
+        start_time = datetime.utcnow()
+        
+        # 初始化 Bloom Filter
+        self._init_dedup_from_db()
+        
+        fetchers = self.registry.get_all(enabled_only=True)
+        fetcher_names = list(fetchers.keys())
+        
+        # 使用自适应调度器执行抓取
+        async def fetch_one(name: str) -> FetchResult:
+            fetcher = fetchers.get(name)
+            if not fetcher:
+                return FetchResult(items=[], error="Fetcher not found")
+            
+            # 标记调度器开始
+            self.scheduler.start_fetch(name)
+            
+            try:
+                result = await self._fetch_with_error_handling(fetcher)
+                # 记录成功
+                self.scheduler.record_success(name, len(result.items))
+                return result
+            except Exception as e:
+                # 记录失败
+                error_msg = str(e)
+                self.scheduler.record_error(name, error_msg)
+                raise
+        
+        # 按调度顺序执行
+        results = await self.scheduler.run_with_scheduling(fetch_one, fetcher_names)
+        
+        # 合并结果
+        all_items = []
+        errors = []
+        
+        for name, result in results.items():
+            if isinstance(result, Exception):
+                errors.append(f"{name}: {str(result)}")
+            elif isinstance(result, FetchResult):
+                if result.error:
+                    all_items.extend(result.items)
+                    errors.append(f"{name}: {result.error}")
+                else:
+                    all_items.extend(result.items)
+        
+        # 计算热度
+        for item in all_items:
+            finalize_heat(item)
+        
+        # 去重 - 按热度保留
+        by_link = self._deduplicate(all_items)
+        items = list(by_link.values())
+
+        paper_min = min(CONFIG.feed_min_papers, CONFIG.feed_max_items // 2)
+        if sum(1 for it in items if it.get("type") == "paper") < paper_min:
+            exclude: Set[str] = {it.get("link") or "" for it in items}
+            exclude.discard("")
+            for it in self._papers_from_database(
+                exclude, limit=max(paper_min * 4, 28)
+            ):
+                finalize_heat(it)
+                lk = it.get("link") or ""
+                if lk and lk not in by_link:
+                    by_link[lk] = it
+            items = list(by_link.values())
+        
+        # Firecrawl 增强（可选）
+        await self._enhance_with_firecrawl(items)
+        
+        # LLM 自动生成摘要（可选）
+        await self._generate_llm_summaries(items)
+        
+        # 排序
+        items.sort(
+            key=lambda x: (int(x.get("heat") or 0), x.get("date") or ""),
+            reverse=True
+        )
+        
+        # 保证论文数量
+        items = self._apply_paper_floor(items)
+        
+        # 清理临时字段
+        self._cleanup_temp_fields(items)
+        
+        # 持久化到数据库
+        self._persist_items(items)
+        
+        # 更新缓存
+        cache.set_feed(items)
+        
+        # 记录运行统计
+        duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        self._record_run(duration_ms, len(items), errors)
+        
+        return items, errors
+    
+    async def _fetch_with_error_handling(self, fetcher) -> FetchResult:
+        """包装抓取器调用，捕获异常"""
+        try:
+            return await fetcher.fetch_with_state()
+        except Exception as e:
+            return FetchResult(items=[], error=str(e))
+    
+    def _papers_from_database(self, exclude_links: Set[str], limit: int) -> List[Dict]:
+        """arXiv 限流等导致本轮无论文时，用库中近期论文兜底"""
+        if limit <= 0:
+            return []
+        try:
+            with get_session() as session:
+                stmt = (
+                    select(Article)
+                    .where(Article.type == "paper")
+                    .order_by(Article.date.desc(), Article.id.desc())
+                    .limit(limit)
+                )
+                rows = list(session.exec(stmt).all())
+                out: List[Dict] = []
+                for r in rows:
+                    if r.link in exclude_links:
+                        continue
+                    try:
+                        tags = json.loads(r.tags or "[]")
+                    except (json.JSONDecodeError, TypeError):
+                        tags = []
+                    out.append({
+                        "type": "paper",
+                        "title": r.title,
+                        "desc": r.desc,
+                        "tags": tags if isinstance(tags, list) else [],
+                        "date": r.date,
+                        "venue": r.venue or "arXiv",
+                        "link": r.link,
+                        "heat": r.heat or 0,
+                    })
+                return out
+        except Exception:
+            return []
+
+    def _deduplicate(self, items: List[Dict]) -> Dict[str, Dict]:
+        """按链接去重，保留热度更高者"""
+        by_link = {}
+        
+        for item in items:
+            link = item.get("link") or ""
+            if not link:
+                continue
+            
+            prev = by_link.get(link)
+            if not prev:
+                by_link[link] = item
+                continue
+            
+            h_new = int(item.get("heat") or 0)
+            h_old = int(prev.get("heat") or 0)
+            d_new = item.get("date") or ""
+            d_old = prev.get("date") or ""
+            
+            if h_new > h_old or (h_new == h_old and d_new > d_old):
+                by_link[link] = item
+        
+        return by_link
+    
+    def _apply_paper_floor(self, items: List[Dict]) -> List[Dict]:
+        """保证列表中至少有指定数量的论文"""
+        paper_min = min(CONFIG.feed_min_papers, CONFIG.feed_max_items // 2)
+        max_n = CONFIG.feed_max_items
+        
+        # 分离论文和其他内容
+        papers = [it for it in items if it.get("type") == "paper"]
+        others = [it for it in items if it.get("type") != "paper"]
+        
+        result = []
+        seen = set()
+        
+        # 先填充非论文内容，保留空间给论文
+        reserve = max(0, max_n - paper_min)
+        for it in others:
+            if len(result) >= reserve:
+                break
+            if it["link"] not in seen:
+                result.append(it)
+                seen.add(it["link"])
+        
+        # 填充论文
+        for it in papers:
+            if len(result) >= max_n:
+                break
+            if it["link"] not in seen:
+                result.append(it)
+                seen.add(it["link"])
+        
+        # 填充剩余
+        for it in items:
+            if len(result) >= max_n:
+                break
+            if it["link"] not in seen:
+                result.append(it)
+                seen.add(it["link"])
+        
+        # 重新排序
+        result.sort(
+            key=lambda x: (int(x.get("heat") or 0), x.get("date") or ""),
+            reverse=True
+        )
+        
+        return result[:max_n]
+    
+    def _cleanup_temp_fields(self, items: List[Dict]):
+        """清理临时字段"""
+        temp_fields = (
+            "_hn_points", "_hn_comments",
+            "_reddit_score", "_reddit_comments",
+            "_lob_score", "_lob_comments",
+            "_gh_stars",
+            "_gh_forks",
+            "_gh_open_issues",
+        )
+        
+        for item in items:
+            for field in temp_fields:
+                item.pop(field, None)
+    
+    def _persist_items(self, items: List[Dict]):
+        """持久化到数据库"""
+        for item in items:
+            try:
+                self.db_cache.save_or_update_article(item)
+            except Exception:
+                # 忽略单个保存失败
+                pass
+    
+    def _record_run(self, duration_ms: int, total_items: int, errors: List[str]):
+        """记录运行统计"""
+        from ..database import get_session
+        from ..models import CollectionRun
+        import json
+        
+        try:
+            with get_session() as session:
+                run = CollectionRun(
+                    completed_at=datetime.utcnow(),
+                    total_items=total_items,
+                    new_items=total_items,  # 简化处理
+                    duration_ms=duration_ms,
+                    errors=json.dumps(errors),
+                )
+                session.add(run)
+        except Exception:
+            pass
+    
+    async def _enhance_with_firecrawl(self, items: List[Dict[str, Any]]) -> None:
+        """
+        使用 Firecrawl 智能增强文章内容
+        
+        对描述太短或需要详细内容的文章进行智能抓取
+        """
+        # 检查 Firecrawl 是否可用
+        from .firecrawl import get_firecrawl_service
+        service = get_firecrawl_service()
+        
+        if not service.config.api_key:
+            return  # 未配置 API key，跳过增强
+        
+        # 选择需要增强的文章（描述太短或热度较高）
+        to_enhance = []
+        for item in items:
+            desc = item.get("desc", "")
+            heat = item.get("heat", 0)
+            # 条件：描述少于100字符 或 热度超过50
+            if len(desc) < 100 or heat > 50:
+                to_enhance.append(item)
+        
+        # 限制增强数量，避免 API 配额耗尽
+        max_enhance = min(10, len(to_enhance))
+        to_enhance = to_enhance[:max_enhance]
+        
+        if not to_enhance:
+            return
+        
+        # 并发增强，但限制并发数
+        semaphore = asyncio.Semaphore(3)
+        
+        async def enhance_one(item: Dict[str, Any]):
+            async with semaphore:
+                try:
+                    result = await service.enhance_article(
+                        title=item.get("title", ""),
+                        link=item.get("link", ""),
+                        existing_desc=item.get("desc", ""),
+                    )
+                    
+                    # 更新文章内容
+                    if result.get("desc") and len(result["desc"]) > len(item.get("desc", "")):
+                        item["desc"] = result["desc"]
+                    if result.get("tags"):
+                        # 合并标签，去重
+                        existing_tags = set(item.get("tags", []))
+                        new_tags = set(result["tags"])
+                        item["tags"] = list(existing_tags | new_tags)
+                    if result.get("full_content"):
+                        item["full_content"] = result["full_content"]
+                        
+                except Exception:
+                    # 增强失败不影响主流程
+                    pass
+        
+        # 执行增强
+        await asyncio.gather(*[enhance_one(item) for item in to_enhance], return_exceptions=True)
+    
+    async def _generate_llm_summaries(self, items: List[Dict[str, Any]]) -> None:
+        """
+        使用 LLM 为文章自动生成高质量摘要
+        
+        优先为论文和高热度文章生成摘要
+        """
+        # 检查 LLM 服务是否可用
+        from .llm_summary import get_llm_service
+        service = get_llm_service()
+        
+        if not service.config.api_key:
+            return  # 未配置 API key，跳过摘要生成
+        
+        # 选择需要生成摘要的文章（论文优先，然后是高热度文章）
+        to_summarize = []
+        for item in items:
+            item_type = item.get("type", "")
+            heat = item.get("heat", 0)
+            existing_desc = item.get("desc", "")
+            
+            # 条件：论文类型 或 热度超过40 或 描述少于150字符
+            if item_type == "paper" or heat > 40 or len(existing_desc) < 150:
+                to_summarize.append(item)
+        
+        # 限制数量，避免 API 配额耗尽
+        max_summaries = min(5, len(to_summarize))
+        to_summarize = to_summarize[:max_summaries]
+        
+        if not to_summarize:
+            return
+        
+        # 并发生成，但限制并发数
+        semaphore = asyncio.Semaphore(2)
+        
+        async def summarize_one(item: Dict[str, Any]):
+            async with semaphore:
+                try:
+                    # 准备内容
+                    title = item.get("title", "")
+                    content = item.get("full_content", item.get("desc", ""))
+                    existing_desc = item.get("desc", "")
+                    
+                    result = await service.generate_summary_for_article(
+                        title=title,
+                        content=content,
+                        existing_desc=existing_desc,
+                    )
+                    
+                    if result.get("success"):
+                        # 更新文章摘要
+                        summary = result.get("summary", "")
+                        if summary and len(summary) > 50:
+                            item["desc"] = summary
+                            item["llm_enhanced"] = True
+                        
+                        # 更新标签
+                        llm_tags = result.get("tags", [])
+                        if llm_tags:
+                            existing_tags = set(item.get("tags", []))
+                            new_tags = set(llm_tags)
+                            item["tags"] = list(existing_tags | new_tags)
+                        
+                except Exception:
+                    # 摘要生成失败不影响主流程
+                    pass
+        
+        # 执行摘要生成
+        await asyncio.gather(*[summarize_one(item) for item in to_summarize], return_exceptions=True)
+    
+    def get_health_status(self) -> Dict[str, Any]:
+        """获取所有抓取器的健康状态（含 Bloom Filter 统计）"""
+        fetchers = self.registry.get_all(enabled_only=True)
+        
+        health = {}
+        for name, fetcher in fetchers.items():
+            stats = fetcher.get_stats()
+            health[name] = {
+                "last_success": stats.last_success.isoformat() if stats.last_success else None,
+                "total_fetches": stats.total_fetches,
+                "total_items": stats.total_items,
+                "error_count": stats.error_count,
+                "avg_duration_ms": round(stats.avg_duration_ms, 1),
+            }
+        
+        # 添加 Bloom Filter 统计
+        bloom_stats = self.dedup.stats()
+        
+        # 添加调度器统计
+        scheduler_stats = self.scheduler.get_stats()
+        recommendations = self.scheduler.get_recommendations()
+        
+        return {
+            "fetchers": health,
+            "deduplication": {
+                "bloom_filter": bloom_stats,
+                "initialized": self._initialized,
+            },
+            "scheduling": {
+                "metrics": scheduler_stats,
+                "recommendations": recommendations,
+            }
+        }
+
+
+# 全局实例
+collector = CollectorService()
