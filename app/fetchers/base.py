@@ -21,6 +21,8 @@ class FetchResult:
     cursor: Optional[str] = None  # 用于增量抓取的游标
     has_more: bool = False
     error: Optional[str] = None
+    status: Optional[str] = None
+    source_status: Optional[Dict[str, Any]] = None
     duration_ms: int = 0
 
 

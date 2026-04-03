@@ -1914,12 +1914,25 @@
               "数据里没有热度字段：① 终端运行 uvicorn，浏览器地址栏输入 http://127.0.0.1:8765/（不要双击本地 .html）。② 端口若不是 8765，把本页脚本里 file 协议对应的 API 地址改成你的端口。③ Cmd+Shift+R 强制刷新后点「抓取最新」。",
             );
           }
-          if (data.errors && data.errors.length) {
+          const summary = data.fetch_summary || null;
+          if (summary?.message) {
+            if (summary.status === "partial" || summary.status === "degraded") {
+              const errorText = data.errors && data.errors.length
+                ? `：${data.errors.slice(0, 2).join("；")}`
+                : "";
+              parts.push(`部分来源未拉取，${summary.message}${errorText}`);
+            } else if (summary.sources?.unchanged || summary.cache?.used) {
+              parts.push(summary.message);
+            }
+          } else if (data.errors && data.errors.length) {
             parts.push("部分来源未拉取: " + data.errors.slice(0, 2).join("；"));
           }
           if (parts.length) {
             errEl.textContent = parts.join(" ");
             errEl.hidden = false;
+          } else {
+            errEl.textContent = "";
+            errEl.hidden = true;
           }
           renderDigestKeywords(data.insights);
           renderCards();

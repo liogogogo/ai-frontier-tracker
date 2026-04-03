@@ -111,9 +111,17 @@ async def get_feed(refresh: bool = False):
     """获取Feed数据"""
     if refresh or not cache.get_feed():
         items, errors = await collector.collect_all()
+        fetch_summary = collector.get_last_fetch_summary()
     else:
         items = cache.get_feed()
         errors = []
+        fetch_summary = {
+            "status": "ok",
+            "message": f"已加载缓存中的 {len(items or [])} 条内容",
+            "sources": {"total": 0, "success": 0, "unchanged": 0, "failed": 0},
+            "cache": {"used": True, "unchanged_fetchers": []},
+            "fetchers": {},
+        }
 
     items = items or []
     insights = build_feed_insights(items)
@@ -122,6 +130,7 @@ async def get_feed(refresh: bool = False):
         "items": items,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "errors": errors,
+        "fetch_summary": fetch_summary,
         "count": len(items),
         "sort": FEED_SORT_META,
         "cache_size": cache.memory.size,
@@ -141,6 +150,7 @@ async def post_refresh():
         "items": items,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "errors": errors,
+        "fetch_summary": collector.get_last_fetch_summary(),
         "count": len(items),
         "sort": FEED_SORT_META,
         "schema_version": CONFIG.schema_version,
