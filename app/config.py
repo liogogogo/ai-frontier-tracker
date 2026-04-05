@@ -2,7 +2,7 @@
 AI Frontier Tracker - 可扩展架构配置
 """
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import FrozenSet, Optional
 
 
 @dataclass
@@ -28,6 +28,18 @@ class DatabaseConfig:
     """数据库配置"""
     url: str = "sqlite:///./data/ai_news.db"
     echo: bool = False
+
+
+@dataclass
+class AnalyticsApiConfig:
+    """词频/趋势 API 参数上限，防止单次请求拉全库导致内存与延迟失控。"""
+    max_days: int = 365
+    max_top_k: int = 200
+    max_trend_recent_days: int = 90
+    max_trend_compare_days: int = 730
+    allowed_article_types: FrozenSet[str] = field(
+        default_factory=lambda: frozenset({"paper", "news", "repo"})
+    )
 
 
 @dataclass
@@ -64,6 +76,7 @@ class AppConfig:
     # 全局配置
     cache: CacheConfig = field(default_factory=CacheConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    analytics: AnalyticsApiConfig = field(default_factory=AnalyticsApiConfig)
 
 
 # 全局配置实例

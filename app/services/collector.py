@@ -3,6 +3,7 @@
 """
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Set
 
@@ -16,6 +17,8 @@ from ..services.scheduler import get_scheduler
 from ..database import get_session
 from ..models import Article
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 class CollectorService:
@@ -51,7 +54,9 @@ class CollectorService:
                 self.dedup.add_batch(links)
 
         except Exception:
-            pass  # 失败不影响运行
+            logger.exception(
+                "Bloom filter seed from DB failed; dedup runs without recent link history"
+            )
 
         self._initialized = True
 

@@ -28,8 +28,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install test tooling
+        run: pip install pytest
+
       - name: Byte-compile
         run: python -m compileall -q app tests
 
       - name: Import app
         run: python -c "from app.main import app; assert app.title"
+
+      - name: Unit tests
+        env:
+          PYTHONPATH: .
+        run: pytest tests/test_fetch_summary.py -q

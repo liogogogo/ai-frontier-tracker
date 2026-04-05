@@ -7,14 +7,16 @@
 AI Frontier Tracker - 主入口
 可扩展架构：插件化 Fetcher + 数据库存储 + 缓存
 """
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,8 +31,12 @@ from .services.weekly_digest import get_or_create_weekly_zh_digest
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 
+logger = logging.getLogger(__name__)
+
 # 初始化数据库
 init_db()
+
+_ANALYTICS = CONFIG.analytics
 
 # 排序元信息
 FEED_SORT_META = {
@@ -71,7 +77,7 @@ async def startup_event():
         items, _ = await collector.collect_all()
         cache.set_feed(items)
     except Exception:
-        pass
+        logger.exception("Startup feed warmup failed; serving stale or empty cache until first refresh")
 
 
 @app.get("/api/health")
@@ -195,9 +201,11 @@ def get_stats():
 
 @app.get("/api/analytics/word-freq")
 def get_word_frequency(
-    days: int = 30,
-    article_type: str = None,
-    top_k: int = 50
+    days: int = Query(30, ge=1, le=_ANALYTICS.max_days),
+    article_type: Optional[str] = Query(
+        None, description="paper | news | repo；省略表示全部"
+    ),
+    top_k: int = Query(50, ge=1, le=_ANALYTICS.max_top_k),
 ):
     """
     词频分析端点
@@ -207,6 +215,15 @@ def get_word_frequency(
         article_type: 筛选文章类型 (paper/news/repo)，None表示全部
         top_k: 返回词数上限
     """
+    if article_type is not None and article_type not in _ANALYTICS.allowed_article_types:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "article_type must be one of: "
+                + ", ".join(sorted(_ANALYTICS.allowed_article_types))
+            ),
+        )
+
     from sqlmodel import select
     from .database import get_session
     from .models import Article
@@ -248,9 +265,9 @@ def get_word_frequency(
 
 @app.get("/api/analytics/trending")
 def get_trending_words(
-    recent_days: int = 7,
-    compare_days: int = 30,
-    top_k: int = 20
+    recent_days: int = Query(7, ge=1, le=_ANALYTICS.max_trend_recent_days),
+    compare_days: int = Query(30, ge=2, le=_ANALYTICS.max_trend_compare_days),
+    top_k: int = Query(20, ge=1, le=_ANALYTICS.max_top_k),
 ):
     """
     趋势分析端点 - 对比近期和历史的词频变化
@@ -260,6 +277,9 @@ def get_trending_words(
         compare_days: 对比的历史天数（默认30天）
         top_k: 返回趋势词数
     """
+    if compare_days <= recent_days:
+        compare_days = min(recent_days + 1, _ANALYTICS.max_trend_compare_days)
+
     from sqlmodel import select
     from .database import get_session
     from .models import Article
