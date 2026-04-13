@@ -13,6 +13,10 @@ RUN mkdir -p /app/data
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Crawl4AI uses Playwright; install browser + OS deps for container usage.
+# This increases image size but makes /api/enhance and /api/scrape work out-of-the-box.
+RUN python -m playwright install --with-deps chromium
+
 COPY app ./app
 COPY static ./static
 

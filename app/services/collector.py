@@ -430,7 +430,7 @@ class CollectorService:
 
     async def _enhance_with_firecrawl(self, items: List[Dict[str, Any]]) -> None:
         """
-        使用 Firecrawl 智能增强文章内容
+        使用增强服务增强文章内容（Crawl4AI 免费兜底 + Firecrawl 可选）
 
         对描述太短或需要详细内容的文章进行智能抓取
         """
@@ -438,8 +438,8 @@ class CollectorService:
         from .firecrawl import get_firecrawl_service
         service = get_firecrawl_service()
 
-        if not service.config.api_key:
-            return  # 未配置 API key，跳过增强
+        if not service.is_enabled():
+            return  # provider=firecrawl 且无 key 时禁用；其它 provider 始终尝试
 
         # 选择需要增强的文章（描述太短或热度较高）
         to_enhance = []

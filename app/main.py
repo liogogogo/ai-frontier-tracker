@@ -783,7 +783,7 @@ async def enhance_article(
     desc: str = ""
 ):
     """
-    使用 Firecrawl 增强文章内容
+    使用增强服务增强文章内容（Crawl4AI 免费兜底 + Firecrawl 可选）
     
     智能抓取网页并提取主要内容，输出 LLM-ready 的 Markdown 格式
     
@@ -793,7 +793,7 @@ async def enhance_article(
         desc: 现有描述（可选）
         
     Returns:
-        增强后的内容 {"desc": "...", "tags": [...], "full_content": "...", "source": "firecrawl|fallback"}
+        增强后的内容 {"desc": "...", "tags": [...], "full_content": "...", "source": "..."}
     """
     from .services.firecrawl import get_firecrawl_service
     
@@ -801,11 +801,15 @@ async def enhance_article(
     result = await service.enhance_article(title, url, desc)
     
     # 标记来源
-    if service.config.api_key:
+    prov = (service.config.provider or "auto").lower()
+    if prov == "firecrawl" and service.config.api_key:
         result["source"] = "firecrawl" if result.get("full_content") else "fallback"
+    elif prov == "crawl4ai" or prov == "auto":
+        result["source"] = "crawl4ai" if result.get("full_content") else "fallback"
+        if not result.get("full_content"):
+            result["note"] = "抓取失败：请检查是否已安装 playwright 浏览器（python -m playwright install chromium）"
     else:
-        result["source"] = "fallback (no API key)"
-        result["note"] = "设置 FIRECRAWL_API_KEY 环境变量以启用智能抓取"
+        result["source"] = "fallback"
     
     return {
         "url": url,
@@ -819,14 +823,14 @@ async def scrape_url(
     only_main_content: bool = True
 ):
     """
-    直接抓取任意 URL（使用 Firecrawl）
+    直接抓取任意 URL（增强服务：Crawl4AI 免费兜底 + Firecrawl 可选）
     
     Args:
         url: 目标 URL
         only_main_content: 是否只提取主要内容
         
     Returns:
-        Firecrawl 抓取结果
+        抓取结果（Markdown/Text）
     """
     from .services.firecrawl import get_firecrawl_service
     
@@ -846,7 +850,7 @@ async def scrape_url(
         return {
             "success": False,
             "url": url,
-            "error": "抓取失败或未配置 Firecrawl API Key"
+            "error": "抓取失败（请检查 Crawl4AI/Playwright 是否安装，或配置 FIRECRAWL_API_KEY）"
         }
 
 

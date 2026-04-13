@@ -812,6 +812,121 @@
         box-shadow: var(--shadow-card);
       }
 
+      .signal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+
+      .signal-card {
+        background: var(--color-bg-elevated);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1rem 1rem 0.95rem;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+        transition: transform 0.2s var(--ease-out-expo),
+          border-color 0.2s var(--ease-out-expo), box-shadow 0.2s var(--ease-out-expo);
+      }
+
+      .signal-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(232, 160, 74, 0.5);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.09);
+      }
+
+      .signal-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .signal-name {
+        font-family: var(--font-display);
+        font-size: 16px;
+        font-weight: 750;
+        letter-spacing: -0.01em;
+        color: var(--color-text-primary);
+        line-height: 1.15;
+      }
+
+      .signal-meta {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        font-family: var(--font-mono);
+        color: var(--color-text-tertiary);
+        font-size: 11px;
+      }
+
+      .signal-pill {
+        padding: 2px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--color-border-subtle);
+        background: rgba(232, 160, 74, 0.12);
+        color: var(--color-text-secondary);
+      }
+
+      .signal-pill--good {
+        background: rgba(110, 231, 183, 0.12);
+      }
+
+      .signal-pill--warn {
+        background: rgba(126, 200, 255, 0.12);
+      }
+
+      .signal-sub {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .signal-chip {
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        border: 1px solid var(--color-border-subtle);
+        background: var(--color-bg-surface);
+        color: var(--color-text-secondary);
+        font-family: var(--font-mono);
+      }
+
+      .signal-links {
+        margin-top: 12px;
+        border-top: 1px solid var(--color-border-subtle);
+        padding-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .signal-link {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--color-border-subtle);
+        background: var(--color-bg-surface);
+        color: var(--color-text-secondary);
+        font-size: 12px;
+        cursor: pointer;
+        transition: transform 0.15s var(--ease-out-expo), border-color 0.15s;
+      }
+
+      .signal-link:hover {
+        transform: translateY(-1px);
+        border-color: rgba(232, 160, 74, 0.55);
+      }
+
+      .signal-link small {
+        color: var(--color-text-tertiary);
+        font-family: var(--font-mono);
+      }
+
       .analytics-header {
         display: flex;
         justify-content: space-between;
@@ -1369,12 +1484,22 @@
             type && String(type).trim()
               ? `&article_type=${encodeURIComponent(type)}`
               : "";
-          const [freqRes, trendRes] = await Promise.all([
+          const [freqRes, trendRes, entitiesRes, emergenceRes, convRes] =
+            await Promise.all([
             fetch(
               `${API_BASE}/api/analytics/word-freq?days=${days}${typeQ}&top_k=50`,
             ),
             fetch(
               `${API_BASE}/api/analytics/trending?recent_days=7&compare_days=${days}&top_k=15`,
+            ),
+            fetch(
+              `${API_BASE}/api/analytics/entities?recent_days=7&compare_days=${days}&top_k=18`,
+            ),
+            fetch(
+              `${API_BASE}/api/analytics/emergence?recent_days=7&compare_days=${days}&top_k=12&min_mentions=1`,
+            ),
+            fetch(
+              `${API_BASE}/api/analytics/convergence?days=${days}&min_source_types=2&top_k=10`,
             ),
           ]);
 
@@ -1384,14 +1509,27 @@
           const trendData = trendRes.ok
             ? await trendRes.json()
             : { trending: [] };
+          const entitiesData = entitiesRes.ok
+            ? await entitiesRes.json()
+            : { entities: [] };
+          const emergenceData = emergenceRes.ok
+            ? await emergenceRes.json()
+            : { emerged: [] };
+          const convData = convRes.ok ? await convRes.json() : { cards: [] };
 
-          renderAnalytics(freqData.result, trendData.trending);
+          renderAnalytics(
+            freqData.result,
+            trendData.trending,
+            entitiesData.entities || [],
+            emergenceData.emerged || [],
+            convData.cards || [],
+          );
         } catch (e) {
           contentEl.innerHTML = `<div class="empty-analytics">加载失败：${e.message}</div>`;
         }
       }
 
-      function renderAnalytics(data, trending) {
+      function renderAnalytics(data, trending, entities, emerged, convergence) {
         const contentEl = document.getElementById("analytics-content");
 
         if (!data || data.total_articles === 0) {
@@ -1476,8 +1614,143 @@
         `
             : "";
 
+        const entitiesHtml = `
+          <div class="trending-section">
+            <div class="section-title">命名实体热度（模型/技术/工具/机构/Benchmark）</div>
+            ${
+              entities && entities.length
+                ? `<div class="signal-grid">
+                  ${entities
+                    .slice(0, 12)
+                    .map((e) => {
+                      const sources = (e.source_types || []).join(" · ");
+                      const v = Number(e.velocity || 0);
+                      const vCls =
+                        v >= 1.5 ? "signal-pill signal-pill--good" : v < 0.7 ? "signal-pill signal-pill--warn" : "signal-pill";
+                      const t =
+                        e.trend === "rising" ? "加速" : e.trend === "cooling" ? "降温" : "平稳";
+                      const top = (e.top_articles || []).slice(0, 2);
+                      const links = top
+                        .map(
+                          (a) =>
+                            `<button type="button" class="signal-link" onclick="openLink('${escapeAttr(a.link || '')}')">
+                              <span>证据</span><small>${escapeHtml((a.type || '').toUpperCase())} · heat ${escapeHtml(String(a.heat ?? ''))}</small>
+                            </button>`,
+                        )
+                        .join("");
+                      return `<div class="signal-card">
+                        <div class="signal-head">
+                          <div class="signal-name">${escapeHtml(e.display || e.id || '')}</div>
+                          <div class="signal-meta">
+                            <span class="${vCls}">v ${escapeHtml(String(e.velocity ?? ''))} · ${t}</span>
+                          </div>
+                        </div>
+                        <div class="signal-meta">
+                          <span class=\"signal-pill\">${escapeHtml(e.category || '?')}</span>
+                          <span class=\"signal-pill\">mentions ${escapeHtml(String(e.mention_count ?? 0))}</span>
+                          <span class=\"signal-pill\">${escapeHtml(sources || 'sources ?')}</span>
+                        </div>
+                        <div class="signal-links">${links}</div>
+                      </div>`;
+                    })
+                    .join("")}
+                </div>`
+                : `<div class="empty-analytics">暂无实体数据。请先抓取内容，然后运行一次补填：<code>POST /api/admin/backfill-entities?days=90</code></div>`
+            }
+          </div>
+        `;
+
+        const emergenceHtml = `
+          <div class="trending-section">
+            <div class="section-title">涌现信号（近期首次出现/突然升温的实体）</div>
+            ${
+              emerged && emerged.length
+                ? `<div class="signal-grid">
+                  ${emerged
+                    .slice(0, 10)
+                    .map((e) => {
+                      const top = (e.top_articles || []).slice(0, 2);
+                      const links = top
+                        .map(
+                          (a) =>
+                            `<button type="button" class="signal-link" onclick="openLink('${escapeAttr(a.link || '')}')">
+                              <span>证据</span><small>${escapeHtml((a.type || '').toUpperCase())} · heat ${escapeHtml(String(a.heat ?? ''))}</small>
+                            </button>`,
+                        )
+                        .join("");
+                      const pill = e.is_new ? "signal-pill signal-pill--good" : "signal-pill";
+                      return `<div class="signal-card">
+                        <div class="signal-head">
+                          <div class="signal-name">${escapeHtml(e.display || e.id || '')}</div>
+                          <div class="signal-meta">
+                            <span class="${pill}">${e.is_new ? "NEW" : "HOT"}</span>
+                          </div>
+                        </div>
+                        <div class="signal-meta">
+                          <span class="signal-pill">${escapeHtml(e.category || '?')}</span>
+                          <span class="signal-pill">mentions ${escapeHtml(String(e.mention_count ?? 0))}</span>
+                          <span class="signal-pill">score ${escapeHtml(String(e.emergence_score ?? ''))}</span>
+                        </div>
+                        <div class="signal-links">${links}</div>
+                      </div>`;
+                    })
+                    .join("")}
+                </div>`
+                : `<div class="empty-analytics">暂无涌现信号（可能是窗口内数据较少或实体未补填）。</div>`
+            }
+          </div>
+        `;
+
+        const convergenceHtml = `
+          <div class="trending-section">
+            <div class="section-title">收敛信号卡（论文 → 实现 → 讨论）</div>
+            ${
+              convergence && convergence.length
+                ? `<div class="signal-grid">
+                  ${convergence
+                    .slice(0, 10)
+                    .map((c) => {
+                      const st = (c.source_types || []).join(" · ") || "?";
+                      const ev = c.evidence || {};
+                      const links = Object.keys(ev)
+                        .slice(0, 3)
+                        .map((k) => {
+                          const a = ev[k] || {};
+                          const href = a.link || c.arxiv_url || "";
+                          return `<button type="button" class="signal-link" onclick="openLink('${escapeAttr(href)}')">
+                              <span>${escapeHtml(k)}</span><small>heat ${escapeHtml(String(a.heat ?? ""))}</small>
+                            </button>`;
+                        })
+                        .join("");
+
+                      return `<div class="signal-card">
+                        <div class="signal-head">
+                          <div class="signal-name">${escapeHtml((c.title || "").slice(0, 72))}</div>
+                          <div class="signal-meta"><span class="signal-pill signal-pill--good">score ${escapeHtml(String(c.convergence_score ?? ""))}</span></div>
+                        </div>
+                        <div class="signal-meta">
+                          <span class="signal-pill">${escapeHtml(st)}</span>
+                          <span class="signal-pill">arXiv ${escapeHtml(String(c.arxiv_id || ""))}</span>
+                          <span class="signal-pill">total_heat ${escapeHtml(String(c.total_heat ?? ""))}</span>
+                        </div>
+                        <div class="signal-links">${links}</div>
+                      </div>`;
+                    })
+                    .join("")}
+                </div>`
+                : `<div class="empty-analytics">当前窗口内暂无收敛卡。说明：目前只从条目 link 自动提取 arXiv ID，社区帖与 repo 往往不直接带 arXiv 链接，因此命中率会偏低（后续可做 README/标题里的 arXiv 链接抽取提升）。</div>`
+            }
+          </div>
+        `;
+
         contentEl.innerHTML =
-          statsHtml + wordcloudHtml + wordListHtml + trendingHtml;
+          statsHtml +
+          wordcloudHtml +
+          wordListHtml +
+          trendingHtml +
+          entitiesHtml +
+          emergenceHtml +
+          convergenceHtml;
 
         setTimeout(() => drawWordCloud(word_frequency.slice(0, 40)), 0);
       }

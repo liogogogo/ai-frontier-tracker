@@ -14,6 +14,7 @@ services:
       MODELVERSE_API_KEY: ${MODELVERSE_API_KEY:-}
       MODELVERSE_MODEL: ${MODELVERSE_MODEL:-}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      ENHANCE_PROVIDER: ${ENHANCE_PROVIDER:-auto}
     volumes:
       - ai_news_data:/app/data
     restart: unless-stopped

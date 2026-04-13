@@ -1,13 +1,19 @@
 """
-Firecrawl 集成 - 智能内容提取服务
+内容增强服务（Firecrawl 可选 + Crawl4AI 免费兜底）
 
-Firecrawl 是一个专为 AI 应用设计的网页抓取工具，可以：
-1. 自动渲染 JavaScript
-2. 提取主内容（去除广告、导航等噪声）
-3. 输出 Markdown 格式（LLM-ready）
-4. 支持批量抓取和结构化数据提取
+为什么要做双通道：
+- Firecrawl：托管式抓取，稳定，但有额度/付费限制
+- Crawl4AI：本地免费（Playwright 驱动），可控，但更依赖运行环境
 
-官网: https://firecrawl.dev
+本模块对外保持原有接口：
+  - scrape()
+  - batch_scrape()
+  - enhance_article()
+  - get_firecrawl_service()
+
+运行策略：
+  - 默认 provider=auto：有 FIRECRAWL_API_KEY → 走 Firecrawl；否则尝试 Crawl4AI；都不可用则返回 fallback
+  - provider 可通过环境变量 ENHANCE_PROVIDER 强制：firecrawl | crawl4ai | auto
 """
 import asyncio
 import os
@@ -20,19 +26,21 @@ import httpx
 
 @dataclass
 class FirecrawlConfig:
-    """Firecrawl 配置"""
+    """增强服务配置（兼容 Firecrawl + Crawl4AI）"""
     api_key: str = ""
     base_url: str = "https://api.firecrawl.dev/v1"
     timeout: float = 30.0
+    provider: str = "auto"  # firecrawl | crawl4ai | auto
     
     def __post_init__(self):
         if not self.api_key:
             self.api_key = os.getenv("FIRECRAWL_API_KEY", "")
+        self.provider = (os.getenv("ENHANCE_PROVIDER", self.provider) or "auto").strip().lower()
 
 
 class FirecrawlService:
     """
-    Firecrawl 服务封装
+    增强服务封装（Firecrawl + Crawl4AI）
     
     提供智能内容提取功能，替代传统的 HTML 清洗逻辑
     """
@@ -40,6 +48,23 @@ class FirecrawlService:
     def __init__(self, config: Optional[FirecrawlConfig] = None):
         self.config = config or FirecrawlConfig()
         self._client: Optional[httpx.AsyncClient] = None
+
+    def _provider_order(self) -> List[str]:
+        p = (self.config.provider or "auto").strip().lower()
+        if p in ("firecrawl", "crawl4ai"):
+            return [p]
+        # auto
+        # 有 key 时先 firecrawl，否则先 crawl4ai
+        if self.config.api_key:
+            return ["firecrawl", "crawl4ai"]
+        return ["crawl4ai", "firecrawl"]
+
+    def is_enabled(self) -> bool:
+        """是否启用增强（auto/crawl4ai 总是尝试；firecrawl 需要 key）"""
+        p = (self.config.provider or "auto").strip().lower()
+        if p == "firecrawl":
+            return bool(self.config.api_key)
+        return True
     
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建 HTTP 客户端"""
@@ -52,6 +77,42 @@ class FirecrawlService:
                 }
             )
         return self._client
+
+    async def _crawl4ai_scrape(
+        self,
+        url: str,
+        only_main_content: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        使用 Crawl4AI 抓取页面并返回与 Firecrawl scrape() 类似的 dict。
+        兼容性说明：Crawl4AI 新版本要求 Python>=3.10；
+        本仓库为了兼容 Python 3.9，会在 requirements 中 pin 到旧版本。
+        """
+        try:
+            from crawl4ai import AsyncWebCrawler  # type: ignore
+        except Exception:
+            return None
+
+        try:
+            # verbose=False 避免污染日志；headless 默认 True
+            async with AsyncWebCrawler(verbose=False) as crawler:
+                result = await crawler.arun(url=url)
+                md = getattr(result, "markdown", "") or ""
+                text = getattr(result, "text", "") or ""
+                html = getattr(result, "cleaned_html", "") or getattr(result, "html", "") or ""
+                meta = getattr(result, "metadata", None) or {}
+                if not isinstance(meta, dict):
+                    meta = {}
+                # only_main_content：Crawl4AI 通常已做主内容抽取，这里仅保持参数一致
+                return {
+                    "markdown": md,
+                    "text": text,
+                    "html": html,
+                    "metadata": meta,
+                    "success": True,
+                }
+        except Exception:
+            return None
     
     async def scrape(
         self,
@@ -76,41 +137,45 @@ class FirecrawlService:
         Returns:
             抓取结果字典，失败返回 None
         """
-        if not self.config.api_key:
-            return None
-        
-        client = await self._get_client()
-        
-        payload = {
-            "url": url,
-            "onlyMainContent": only_main_content,
-        }
-        
-        if formats:
-            payload["formats"] = formats
-        if include_tags:
-            payload["includeTags"] = include_tags
-        if exclude_tags:
-            payload["excludeTags"] = exclude_tags
-        if wait_for:
-            payload["waitFor"] = wait_for
-        
-        try:
-            response = await client.post(
-                f"{self.config.base_url}/scrape",
-                json=payload
-            )
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            if data.get("success"):
-                return data.get("data", {})
-            else:
-                return None
-                
-        except Exception:
-            return None
+        for provider in self._provider_order():
+            if provider == "firecrawl":
+                if not self.config.api_key:
+                    continue
+                client = await self._get_client()
+
+                payload = {
+                    "url": url,
+                    "onlyMainContent": only_main_content,
+                }
+
+                if formats:
+                    payload["formats"] = formats
+                if include_tags:
+                    payload["includeTags"] = include_tags
+                if exclude_tags:
+                    payload["excludeTags"] = exclude_tags
+                if wait_for:
+                    payload["waitFor"] = wait_for
+
+                try:
+                    response = await client.post(
+                        f"{self.config.base_url}/scrape",
+                        json=payload
+                    )
+                    response.raise_for_status()
+
+                    data = response.json()
+                    if data.get("success"):
+                        return data.get("data", {})
+                except Exception:
+                    continue
+
+            elif provider == "crawl4ai":
+                r = await self._crawl4ai_scrape(url, only_main_content=only_main_content)
+                if r:
+                    return r
+
+        return None
     
     async def batch_scrape(
         self,
@@ -160,6 +225,7 @@ class FirecrawlService:
         Returns:
             抓取结果列表
         """
+        # search 功能仅 Firecrawl 支持；无 key 时直接返回空
         if not self.config.api_key:
             return []
         

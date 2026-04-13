@@ -5,7 +5,7 @@
 
 **Self-hosted aggregator for the AI frontier** — 把**大模型相关的前沿论文、工程实践与社区讨论**收拢到一处，核心用途是辅助**挖掘未来有潜力的 AI 项目与方向**（早期技术/产品线索）；并配套**轻量分析**（词频、趋势、Feed 洞察），对齐**最活跃从业者**在公开渠道上押注什么、试什么。
 
-数据来自大厂博客与 RSS、**HuggingFace Papers**、Hacker News、Reddit、Lobsters、arXiv、GitHub 等；经去重、热度与调度合并；配套**词频分析、趋势检测、Topic Cards、行业影响分布**等分析接口；可选 LLM 中文周评与 Firecrawl 正文增强。系统不代替你思考，但减少「漏掉主线」的概率。
+数据来自大厂博客与 RSS、**HuggingFace Papers**、Hacker News、Reddit、Lobsters、arXiv、GitHub 等；经去重、热度与调度合并；配套**词频分析、趋势检测、Topic Cards、行业影响分布**等分析接口；可选 LLM 中文周评与**正文增强（默认 Crawl4AI 免费兜底；可选 Firecrawl）**。系统不代替你思考，但减少「漏掉主线」的概率。
 
 ---
 
@@ -74,7 +74,8 @@ docker run --rm -p 8767:8000 -v ai_news_data:/app/data ai-frontier-tracker
 | `OPENAI_API_KEY` / `OPENAI_MODEL`         | OpenAI 摘要与周刊                            |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`   | Claude                                       |
 | `MODELVERSE_API_KEY` / `MODELVERSE_MODEL` | 兼容国内模型 API                             |
-| `FIRECRAWL_API_KEY`                       | `/api/enhance`、`/api/scrape` 智能抓取       |
+| `ENHANCE_PROVIDER`                        | `/api/enhance`、`/api/scrape` 增强服务：`auto|crawl4ai|firecrawl` |
+| `FIRECRAWL_API_KEY`                       | 可选：使用 Firecrawl 托管抓取（有额度时）    |
 
 未配置 LLM / Firecrawl 时，对应接口会降级或返回提示，不影响主 Feed。
 
@@ -108,8 +109,8 @@ docker run --rm -p 8767:8000 -v ai_news_data:/app/data ai-frontier-tracker
 
 | 方法 | 路径             | 说明                       |
 | ---- | ---------------- | -------------------------- |
-| POST | `/api/enhance`   | Firecrawl 增强单条内容     |
-| GET  | `/api/scrape`    | 抓取任意 URL（Firecrawl）  |
+| POST | `/api/enhance`   | 增强单条内容（Crawl4AI 兜底；可选 Firecrawl） |
+| GET  | `/api/scrape`    | 抓取任意 URL（Crawl4AI 兜底；可选 Firecrawl） |
 | POST | `/api/summarize` | LLM 摘要生成               |
 
 ## 社区与治理

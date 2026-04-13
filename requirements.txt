@@ -3,3 +3,9 @@ uvicorn[standard]>=0.32.0
 httpx>=0.27.0
 sqlmodel>=0.0.14
 python-dotenv>=1.0.0
+playwright>=1.40.0
+# Crawl4AI 新版本要求 Python>=3.10；为兼容本仓库 Python 3.9，pin 到 0.3.x
+crawl4ai==0.3.7
+playwright-stealth==1.0.6
+# macOS 系统 Python 常见 LibreSSL，urllib3 v2 会告警；pin 到 v1 避免日志污染
+urllib3<2
