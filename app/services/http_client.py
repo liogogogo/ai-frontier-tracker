@@ -111,13 +111,18 @@ class RetryableHTTPClient:
                     self._not_modified_count += 1
                     raise NotModifiedError(url)
                 
-                # 429 限流：arXiv 等常无 Retry-After，需至少等几秒再试
+                # 429 限流：arXiv export 建议约 ≥3s/请求；连发易 429，无 Retry-After 时需长冷却
                 if response.status_code == 429:
-                    ra_raw = response.headers.get("Retry-After", "")
+                    ra_raw = (response.headers.get("Retry-After") or "").strip()
                     try:
-                        retry_after = max(12, int(float(ra_raw)))
+                        parsed = int(float(ra_raw)) if ra_raw else 0
                     except (ValueError, TypeError):
-                        retry_after = 14
+                        parsed = 0
+                    is_arxiv = "export.arxiv.org" in url or "arxiv.org/api" in url
+                    if parsed > 0:
+                        retry_after = max(parsed, 22 if is_arxiv else 12)
+                    else:
+                        retry_after = 28 if is_arxiv else 14
                     if attempt < self.max_retries - 1:
                         await asyncio.sleep(retry_after)
                         continue

@@ -12,14 +12,20 @@ from ..utils.text import infer_tags
 
 
 HN_ALGOLIA_QUERIES = [
-    "LLM inference",
-    "vllm OR llama.cpp",
-    "GPU training transformer distributed",
-    "speculative decoding OR quantization llm",
+    # LLM 通用
+    "large language model reasoning context window",
+    # 推理优化
+    "LLM inference vllm OR llama.cpp OR quantization",
+    "speculative decoding OR flash attention kv cache",
+    # RAG
     "RAG retrieval augmented generation",
-    "CUDA kernel transformer OR flash attention",
-    "OpenAI OR Anthropic OR Google Gemini release",
-    "NVIDIA OR CUDA OR TensorRT inference LLM",
+    # Agent
+    "LLM agent tool use function calling",
+    # 多模态
+    "multimodal LLM vision language model",
+    # 训练
+    "RLHF alignment preference optimization DPO",
+    "fine-tuning instruction tuning LoRA language model",
 ]
 
 

@@ -28,13 +28,86 @@ class ArxivFetcher(BaseFetcher):
         self.base_url = "https://export.arxiv.org/api/query"
         self.etag_cache = get_etag_cache()
         self._not_modified_count = 0
-        self._cached_items: List[Dict[str, Any]] = []  # 缓存上次内容
+        self._cached_items: List[Dict[str, Any]] = []          # 合并后缓存
+        self._cached_items_by_topic: Dict[str, List[Dict[str, Any]]] = {}  # 按主题缓存
 
-    def _query_broad(self) -> str:
-        return "cat:cs.LG OR cat:cs.CL OR cat:cs.AI"
+    # 按主题分组的 arXiv 查询：每组独立召回，合并去重，保证六个方向均有论文。
+    # 每组 (label, search_query, per_query_n)
+    TOPIC_QUERIES: List[tuple] = [
+        (
+            "LLM",
+            "(cat:cs.CL OR cat:cs.AI OR cat:cs.LG) AND "
+            "(all:LLM OR all:LLMs OR all:\"large language model\" OR "
+            "all:\"foundation model\" OR all:\"language model\" OR "
+            "all:\"pretrain\" OR all:GPT OR all:\"reasoning\" OR "
+            "all:\"chain of thought\" OR all:\"chain-of-thought\" OR "
+            "all:\"long context\" OR all:\"context window\" OR "
+            "all:\"mixture of expert\" OR all:MoE)",
+            14,
+        ),
+        (
+            "推理优化",
+            "(cat:cs.LG OR cat:cs.AI OR cat:cs.AR) AND "
+            "(all:\"inference\" AND (all:LLM OR all:\"language model\" OR all:transformer)) OR "
+            "(all:\"speculative decoding\" OR all:\"kv cache\" OR all:\"kv-cache\" OR "
+            "all:\"continuous batching\" OR all:\"paged attention\" OR "
+            "all:\"flash attention\" OR all:quantization OR all:\"model compression\" OR "
+            "all:\"weight quantiz\" OR all:\"int4\" OR all:\"int8\" OR "
+            "all:\"kernel optim\" OR all:\"serving\" AND all:LLM)",
+            10,
+        ),
+        (
+            "RAG",
+            "(cat:cs.CL OR cat:cs.IR OR cat:cs.AI) AND "
+            "(all:RAG OR all:\"retrieval augmented\" OR all:\"retrieval-augmented\" OR "
+            "all:\"retrieval augmentation\" OR all:\"dense retrieval\" OR "
+            "all:\"knowledge retrieval\" OR all:\"document retrieval\" AND all:\"language model\" OR "
+            "all:\"hybrid search\" OR all:rerank OR all:\"vector database\" OR "
+            "all:embedding AND all:\"language model\")",
+            10,
+        ),
+        (
+            "Agent",
+            "(cat:cs.CL OR cat:cs.AI OR cat:cs.LG) AND "
+            "(all:agent OR all:agents OR all:agentic OR all:\"language agent\" OR "
+            "all:\"autonomous agent\" OR all:\"llm agent\" OR "
+            "all:\"tool use\" OR all:\"tool-use\" OR all:\"tool calling\" OR "
+            "all:\"function calling\" OR all:\"multi-agent\" OR all:\"multi agent\" OR "
+            "all:\"code generation\" AND all:agent OR "
+            "all:\"web agent\" OR all:\"gui agent\" OR all:AutoGPT OR "
+            "all:\"planning\" AND (all:LLM OR all:\"language model\"))",
+            10,
+        ),
+        (
+            "多模态",
+            "(cat:cs.CV OR cat:cs.CL OR cat:cs.AI) AND "
+            "(all:\"multimodal\" OR all:\"multi-modal\" OR "
+            "all:\"vision language\" OR all:\"visual language\" OR "
+            "all:VLM OR all:\"vision-language model\" OR "
+            "all:\"image-text\" OR all:\"text-to-image\" OR "
+            "all:\"text-to-video\" OR all:\"video understanding\" OR "
+            "all:\"visual question\" OR all:\"vision transformer\" AND all:\"language model\" OR "
+            "all:\"multimodal LLM\" OR all:MLLM OR all:\"omni model\")",
+            10,
+        ),
+        (
+            "训练",
+            "(cat:cs.LG OR cat:cs.CL OR cat:cs.AI) AND "
+            "(all:RLHF OR all:\"reinforcement learning from human\" OR "
+            "all:\"preference optim\" OR all:DPO OR all:\"PPO\" AND all:\"language model\" OR "
+            "all:\"supervised fine-tun\" OR all:SFT OR "
+            "all:\"instruction tun\" OR all:instruct OR "
+            "all:alignment OR all:\"human feedback\" OR "
+            "all:LoRA OR all:QLoRA OR all:\"parameter efficient\" OR "
+            "all:\"continual learning\" AND all:LLM OR "
+            "all:\"distributed training\" AND all:\"language model\")",
+            10,
+        ),
+    ]
 
     async def fetch(self, cursor: Optional[str] = None) -> FetchResult:
-        """单次 API 调用（支持ETag缓存）"""
+        """多主题顺序查询，六个方向各自召回后合并去重（遵守 arXiv API 访问频率）"""
+
         async with RetryableHTTPClient(
             base_headers={
                 "User-Agent": "AI-Frontier-Tracker/2 (+https://arxiv.org/help/api; scholarly aggregator)",
@@ -43,48 +116,80 @@ class ArxivFetcher(BaseFetcher):
             retry_delay=self.config.retry_delay,
             timeout=self.config.timeout,
             rate_limit_delay=self.config.rate_limit_delay,
-            cache_condition=True,  # 启用条件请求
+            cache_condition=True,
         ) as client:
-            n = max(12, min(40, int(self.config.max_items or 24)))
-            used_cache = False
+            # 顺序执行（arXiv 要求友好访问，不做并发）
+            all_results: List[Dict[str, Any]] = []
+            errors: List[str] = []
+            used_any_cache = False
 
-            try:
-                results = await self._fetch_one(client, self._query_broad(), n)
-                # 更新缓存内容
-                self._cached_items = results
-            except NotModifiedError:
-                # 304 Not Modified - 使用缓存内容
-                self._not_modified_count += 1
-                used_cache = True
-                results = self._cached_items
+            # 请求间隔由 RetryableHTTPClient.rate_limit_delay 保证（≥3s/次），此处不再额外 sleep
+            for label, query, n in self.TOPIC_QUERIES:
+                try:
+                    items = await self._fetch_one(client, query, n, cache_key=label)
+                    all_results.extend(items)
+                except NotModifiedError:
+                    self._not_modified_count += 1
+                    used_any_cache = True
+                    all_results.extend(self._cached_items_by_topic.get(label, []))
+                except Exception as e:
+                    errors.append(f"{label}: {e}")
 
-            by_link = {}
-            for item in results:
-                link = item.get("link", "")
-                if link and link not in by_link:
-                    by_link[link] = item
+            # 按 link 去重，保留首次出现（各主题已按时间降序）
+            by_link: Dict[str, Dict[str, Any]] = {}
+            for item in all_results:
+                lk = item.get("link", "")
+                if lk and lk not in by_link:
+                    by_link[lk] = item
 
             items = list(by_link.values())
+            # 全局按日期降序
+            items.sort(key=lambda x: x.get("date") or "", reverse=True)
+            # 遵守 max_items 上限
+            cap = int(self.config.max_items or 50)
+            items = items[:cap]
 
-            # 构建状态信息
-            status_msg = None
-            if used_cache:
-                status_msg = f"[arXiv 未变化(304)，使用缓存 {len(items)} 条]"
+            # 缓存供下轮 304 使用
+            self._cached_items = items
+
+            outcome = "success"
+            if errors and items:
+                outcome = "partial"
+            elif errors and not items:
+                outcome = "error"
+            elif used_any_cache:
+                outcome = "unchanged"
+
+            status_parts = []
+            if used_any_cache:
+                status_parts.append("部分主题命中304缓存")
+            if errors:
+                status_parts.append(f"{len(errors)} 个主题失败: {'; '.join(errors[:2])}")
 
             return FetchResult(
                 items=items,
-                status=status_msg,
+                error="; ".join(errors) if errors else None,
+                status=f"[arXiv {', '.join(status_parts)}]" if status_parts else None,
                 source_status={
-                    "outcome": "unchanged" if used_cache else "success",
-                    "used_cache": used_cache,
+                    "outcome": outcome,
+                    "used_cache": used_any_cache,
                     "fetched_count": len(items),
-                    "not_modified": used_cache,
+                    "topics": len(self.TOPIC_QUERIES),
+                    "errors": len(errors),
                 },
-                cursor=None  # arXiv 不支持游标分页
+                cursor=None,
             )
 
-    async def _fetch_one(self, client: RetryableHTTPClient, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """单次arXiv查询（支持ETag缓存）"""
+    async def _fetch_one(
+        self,
+        client: RetryableHTTPClient,
+        query: str,
+        max_results: int,
+        cache_key: str = "",
+    ) -> List[Dict[str, Any]]:
+        """单次arXiv查询（支持按主题 ETag 缓存）"""
+        # 每个主题用独立的 cache_key 区分 ETag
+        ck = f"{self.base_url}#{cache_key}" if cache_key else self.base_url
         params = {
             "search_query": query,
             "start": 0,
@@ -93,23 +198,24 @@ class ArxivFetcher(BaseFetcher):
             "sortOrder": "descending",
         }
 
-        # 获取条件请求头
-        etag_headers = self.etag_cache.get_headers(self.base_url)
+        etag_headers = self.etag_cache.get_headers(ck)
 
         try:
             response = await client.get(self.base_url, params=params, etag_headers=etag_headers)
 
-            # 更新缓存标记
             self.etag_cache.update(
-                self.base_url,
+                ck,
                 etag=response.headers.get("etag"),
-                last_modified=response.headers.get("last-modified")
+                last_modified=response.headers.get("last-modified"),
             )
 
-            return self._parse_entries(response.text)
+            items = self._parse_entries(response.text)
+            # 按主题存入缓存
+            if cache_key:
+                self._cached_items_by_topic[cache_key] = items
+            return items
 
         except NotModifiedError:
-            # 304 Not Modified - 内容未变化
             raise
 
     def _parse_entries(self, xml_text: str) -> List[Dict[str, Any]]:

@@ -12,9 +12,9 @@ from ..utils.text import infer_tags
 
 
 REDDIT_SUBS_HOT = [
-    ("LocalLLaMA", 12),
-    ("MachineLearning", 8),
-    ("HuggingFace", 6),
+    ("LocalLLaMA", 16),
+    ("HuggingFace", 8),
+    ("MachineLearning", 6),
 ]
 
 

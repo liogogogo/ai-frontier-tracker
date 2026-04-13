@@ -11,6 +11,8 @@ from .github import GitHubFetcher
 from .hackernews import HackerNewsFetcher
 from .reddit import RedditFetcher
 from .lobsters import LobstersFetcher
+from .firecrawl import FirecrawlFetcher
+from .huggingface import HuggingFaceFetcher
 
 __all__ = [
     "BaseFetcher",

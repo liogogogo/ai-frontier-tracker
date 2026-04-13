@@ -14,6 +14,16 @@ from ..config import CONFIG
 from ..utils.text import strip_html, infer_tags
 
 
+# 部分站点（含 Microsoft 博客）会拦截默认 httpx User-Agent，需浏览器标识
+_RSS_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 AI-Frontier-Tracker/2"
+    ),
+    "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+}
+
+
 # RSS订阅源配置 - 支持论文源标记
 RSS_FEEDS = [
     # 新闻源 (type=news)
@@ -28,13 +38,16 @@ RSS_FEEDS = [
     ("AWS Machine Learning Blog", "https://aws.amazon.com/blogs/machine-learning/feed/", 7, "news"),
     ("Microsoft AI Blog", "https://blogs.microsoft.com/ai/feed/", 7, "news"),
     ("Meta Engineering", "https://engineering.fb.com/feed/", 7, "news"),
-    ("TechCrunch — AI", "https://techcrunch.com/category/artificial-intelligence/feed/", 7, "news"),
-    # 论文源见独立 arxiv fetcher（API 查询 cs.LG/CL/AI）。
+    # 论文源见独立 arxiv fetcher（关键词限定为 LLM/Agent 等）。
     # HF Papers 官方 RSS 曾公开，现常 401；若恢复可换自建 RSSHub 或 HF API 集成。
-    # Berkeley AI Research
-    ("BAIR", "https://bair.berkeley.edu/blog/feed.xml", 10, "paper"),
-    # Stanford HAI
-    ("Stanford HAI", "https://hai.stanford.edu/news?format=rss", 10, "paper"),
+    # Berkeley AI Research（官方博客，归类为 news）
+    ("BAIR", "https://bair.berkeley.edu/blog/feed.xml", 10, "news"),
+    # Stanford HAI（机构资讯流，归类为 news）
+    ("Stanford HAI", "https://hai.stanford.edu/news?format=rss", 8, "news"),
+    # 研究机构官方研究博客（经可访问性校验，偏论文与实验室成果叙事）
+    ("Google Research Blog", "https://blog.research.google/feeds/posts/default", 8, "news"),
+    ("Microsoft Research", "https://www.microsoft.com/en-us/research/feed/", 8, "news"),
+    ("Apple ML Research", "https://machinelearning.apple.com/rss.xml", 7, "news"),
     # 新增源（官方 /blog/rss、mistral feed、allenai feed 曾 404，改用可用地址）
     (
         "Anthropic News",
@@ -51,7 +64,6 @@ RSS_FEEDS = [
         "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_google_ai.xml",
         6, "news",
     ),
-    ("Stability AI", "https://stability.ai/news?format=rss", 6, "news"),
 ]
 
 
@@ -74,6 +86,7 @@ class RSSFetcher(BaseFetcher):
         cached_sources = []
 
         async with RetryableHTTPClient(
+            base_headers=_RSS_HTTP_HEADERS,
             max_retries=self.config.max_retries,
             retry_delay=self.config.retry_delay,
             timeout=self.config.timeout,

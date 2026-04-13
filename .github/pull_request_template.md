@@ -6,7 +6,7 @@
 
 - [ ] `python -m compileall app tests`
 - [ ] `python -c "from app.main import app"`
-- [ ] (If applicable) `uvicorn app.main:app` runs and `/api/health` OK
+- [ ] (If applicable) `uvicorn app.main:app --reload --port 8767` runs and `/api/health` OK
 
 ## Checklist
 

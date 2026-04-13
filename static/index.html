@@ -792,27 +792,6 @@
         letter-spacing: 0.02em;
       }
 
-      .btn-fetch {
-        margin-left: auto;
-        padding: 5px 14px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--color-border);
-        background: transparent;
-        color: var(--color-text-secondary);
-        font-size: 11.5px;
-        font-weight: 500;
-        cursor: pointer;
-        font-family: var(--font-body);
-        transition: all 0.2s var(--ease-out-expo);
-        letter-spacing: 0.01em;
-      }
-
-      .btn-fetch:hover {
-        background: var(--accent-soft);
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-
       .empty {
         text-align: center;
         padding: 4rem 1rem;
@@ -1132,7 +1111,6 @@
         .fetch-bar,
         .filters,
         .tabs,
-        .btn-fetch,
         .ask-btn {
           display: none !important;
         }
@@ -1195,14 +1173,6 @@
             </div>
             <button type="button" class="ask-btn" id="btn-refresh">
               抓取最新
-            </button>
-            <button
-              type="button"
-              class="ask-btn"
-              id="btn-prompt"
-              title="复制提示词，便于粘贴到 AI 助手"
-            >
-              复制检索提示 ↗
             </button>
           </div>
 
@@ -1286,19 +1256,17 @@
     </div>
 
     <script>
-      /* file:// 打开静态页时请求本地 API；无 CORS 时请改用 http://127.0.0.1:8765/ */
+      /* file:// 打开静态页时请求本地 API；无 CORS 时请改用 http://127.0.0.1:8767/ */
       const API_BASE = (() => {
         try {
           if (window.location.protocol === "file:") {
-            return "http://127.0.0.1:8765";
+            return "http://127.0.0.1:8767";
           }
         } catch (e) {
           /* ignore */
         }
         return "";
       })();
-      const PROMPT_TEXT =
-        "请基于我关心的方向（LLM 推理、训练系统、RAG、Agent、多模态），从本周 arXiv cs.LG/cs.CL、顶会工程论文与官方实验室博客里，提炼 5 条最值得跟进的工程实践与可落地方案，并附论文/链接。";
 
       let DATA = [];
       let activeTab = "all";
@@ -1320,28 +1288,6 @@
           .replace(/>/g, "&gt;")
           .replace(/\r\n/g, " ")
           .replace(/[\r\n]/g, " ");
-      }
-
-      function copyTextRobust(text) {
-        if (navigator.clipboard && window.isSecureContext) {
-          return navigator.clipboard.writeText(text);
-        }
-        return Promise.reject(new Error("clipboard-unavailable"));
-      }
-
-      function copyViaExecCommand(text) {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-          return document.execCommand("copy");
-        } finally {
-          document.body.removeChild(ta);
-        }
       }
 
       function openLink(url) {
@@ -1372,49 +1318,6 @@
         const days = hb.days_old != null ? String(hb.days_old) : "";
         const topic = hb.topic_bonus != null ? String(hb.topic_bonus) : "";
         return `${head} 本条 channel=${ch} · days_old=${days} · topic+${topic}`;
-      }
-
-      function sendPrompt(text) {
-        const el = document.getElementById("fetch-status");
-        const prev = el ? el.textContent : "";
-        const okMsg = () => {
-          if (el) {
-            el.textContent = "已复制到剪贴板，可粘贴到 AI 助手中继续深挖";
-            setTimeout(() => {
-              el.textContent = prev;
-            }, 3200);
-          }
-        };
-        const failMsg = () => {
-          if (el) {
-            el.textContent =
-              "复制失败：请用 http://localhost 打开，或手动复制弹窗内文字";
-            setTimeout(() => {
-              el.textContent = prev;
-            }, 5000);
-          }
-        };
-
-        if (!text || !String(text).trim()) {
-          if (el) {
-            el.textContent = "提示词为空，请刷新后重试";
-            setTimeout(() => {
-              el.textContent = prev;
-            }, 3000);
-          }
-          return;
-        }
-
-        copyTextRobust(text)
-          .then(okMsg)
-          .catch(() => {
-            if (copyViaExecCommand(text)) {
-              okMsg();
-              return;
-            }
-            failMsg();
-            window.prompt("请手动复制以下提示词（全选后复制）：", text);
-          });
       }
 
       function badgeClass(type) {
@@ -1462,9 +1365,13 @@
         contentEl.innerHTML = '<div class="loading-text">正在分析数据...</div>';
 
         try {
+          const typeQ =
+            type && String(type).trim()
+              ? `&article_type=${encodeURIComponent(type)}`
+              : "";
           const [freqRes, trendRes] = await Promise.all([
             fetch(
-              `${API_BASE}/api/analytics/word-freq?days=${days}&article_type=${type}&top_k=50`,
+              `${API_BASE}/api/analytics/word-freq?days=${days}${typeQ}&top_k=50`,
             ),
             fetch(
               `${API_BASE}/api/analytics/trending?recent_days=7&compare_days=${days}&top_k=15`,
@@ -1775,7 +1682,6 @@
             const tags = (d.tags || [])
               .map((t) => `<span class="tag">${escapeHtml(t)}</span>`)
               .join("");
-            const deep = `请详细介绍《${rawTitle}》的核心技术贡献、工程实现细节与实践价值，并给出我可复现或跟进的步骤。`;
             return `
     <article class="card" data-href="${link}">
       <div class="card-meta">
@@ -1788,22 +1694,14 @@
       <div class="card-desc">${mainDesc}</div>
       <div class="card-footer">
         ${tags}
-        <button type="button" class="btn-fetch" data-deep="${escapeAttr(deep)}">深入解读 ↗</button>
       </div>
     </article>`;
           })
           .join("");
 
         grid.querySelectorAll(".card").forEach((card) => {
-          card.addEventListener("click", (e) => {
-            if (e.target.closest(".btn-fetch")) return;
+          card.addEventListener("click", () => {
             openLink(card.dataset.href);
-          });
-        });
-        grid.querySelectorAll(".btn-fetch").forEach((btn) => {
-          btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            sendPrompt(btn.dataset.deep || "");
           });
         });
       }
@@ -1845,7 +1743,7 @@
           });
         });
         note.textContent =
-          "「分析」Tab 可按数据库历史做词云与趋势；单篇深度解读请用卡片上的「深入解读」。";
+          "「分析」Tab 可按数据库历史做词云与趋势。";
       }
 
       async function loadWeeklyDigest() {
@@ -1911,7 +1809,7 @@
           const parts = [];
           if (DATA.length > 0 && !anyHeat) {
             parts.push(
-              "数据里没有热度字段：① 终端运行 uvicorn，浏览器地址栏输入 http://127.0.0.1:8765/（不要双击本地 .html）。② 端口若不是 8765，把本页脚本里 file 协议对应的 API 地址改成你的端口。③ Cmd+Shift+R 强制刷新后点「抓取最新」。",
+              "数据里没有热度字段：① 终端运行 uvicorn，浏览器地址栏输入 http://127.0.0.1:8767/（不要双击本地 .html）。② 端口若不是 8767，把本页脚本里 file 协议对应的 API 地址改成你的端口。③ Cmd+Shift+R 强制刷新后点「抓取最新」。",
             );
           }
           const summary = data.fetch_summary || null;
@@ -1966,9 +1864,6 @@
       document
         .getElementById("btn-refresh")
         .addEventListener("click", () => loadFeed(true));
-      document
-        .getElementById("btn-prompt")
-        .addEventListener("click", () => sendPrompt(PROMPT_TEXT));
       document
         .getElementById("btn-analyze")
         ?.addEventListener("click", loadAnalytics);

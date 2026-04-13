@@ -17,7 +17,7 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install ruff           # 可选，本地静态检查
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8767
 ```
 
 复制 [.env.example](.env.example) 为 `.env` 并按需填写（本地运行不填也可跑通主 Feed）。

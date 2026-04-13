@@ -23,7 +23,13 @@ BIG_TECH_RSS_VENUES: FrozenSet[str] = frozenset({
     "xAI News",
 })
 
-SILICON_VALLEY_MEDIA_VENUES: FrozenSet[str] = frozenset({"TechCrunch — AI"})
+# 顶会/实验室研究叙事（非产品稿为主；与 BIG_TECH 官宣区分）
+RESEARCH_LAB_RSS_VENUES: FrozenSet[str] = frozenset({
+    "Google Research Blog",
+    "Microsoft Research",
+    "Apple ML Research",
+    "BAIR",
+})
 
 BIG_TECH_REPO = re.compile(
     r"^(meta-ai|facebookresearch|google|google-research|openai|microsoft|nvidia|apple|anthropic|x-ai|deepmind|langchain-ai|aws-samples|torch)/",
@@ -53,17 +59,18 @@ def engineering_topic_score(text: str) -> int:
     acc = 0
     
     patterns = [
-        (r"\bllm\b", 20),
-        (r"language model", 20),
-        (r"inference", 18),
+        (r"\bllm\b", 22),
+        (r"language model", 22),
+        (r"\bagent\b|agentic|tool.use|function.calling", 18),
+        (r"inference", 16),
         (r"quantiz", 14),
         (r"\brag\b|retriev", 16),
         (r"\bmo[eE]\b|mixture of expert", 15),
-        (r"distributed|training at scale", 14),
+        (r"RLHF|alignment|preference|DPO", 14),
         (r"flash.?attn|kv.?cache|paged.?attention", 16),
-        (r"\bgpu\b|cuda|triton", 12),
-        (r"transformer", 10),
-        (r"\bagent\b|tool use", 12),
+        (r"instruct|instruction.tun", 14),
+        (r"\bgpu\b|cuda|triton", 10),
+        (r"transformer", 8),
     ]
     
     for pat, w in patterns:
@@ -92,9 +99,25 @@ def finalize_heat(item: dict) -> None:
         "topic_bonus": topic,
     }
     
+    # HuggingFace Papers：论文基础分 + upvotes 社交信号
+    if v.startswith("huggingface:"):
+        base = 145
+        upvotes = int(item.get("upvotes") or 0)
+        social_raw = math.log1p(upvotes) * 18  # 10 upvotes ≈ +43, 100 ≈ +84
+        social_pts = min(180, social_raw)
+        rec_pts = int(178 * rec)
+        total = int(base + social_pts + rec_pts + topic)
+        bd.update({
+            "channel": "huggingface_papers",
+            "base": base,
+            "upvotes": upvotes,
+            "social_points": round(social_pts, 1),
+            "recency_points": rec_pts,
+        })
+
     # 根据类型计算热度
-    if typ == "paper" or "arxiv.org/abs" in link_l:
-        base = 125
+    elif typ == "paper" or "arxiv.org/abs" in link_l:
+        base = 138
         rec_pts = int(185 * rec)
         total = base + topic + rec_pts
         bd.update({
@@ -199,15 +222,16 @@ def finalize_heat(item: dict) -> None:
             "channel_floor": ch,
             "recency_points": int(205 * rec),
         })
-    
-    elif v in SILICON_VALLEY_MEDIA_VENUES:
-        ch = 295
-        total = int(ch + int(175 * rec) + int(topic * 0.28))
+
+    elif v in RESEARCH_LAB_RSS_VENUES:
+        ch = 355
+        total = int(ch + int(188 * rec) + int(topic * 0.30))
         bd.update({
-            "channel": "tech_press_ai",
+            "channel": "research_lab_rss",
             "channel_floor": ch,
+            "recency_points": int(188 * rec),
         })
-    
+
     else:
         ch = 175
         total = int(ch + int(130 * rec) + int(topic * 0.25))

@@ -12,10 +12,12 @@ from ..utils.text import infer_tags
 
 
 LOBSTERS_ML = re.compile(
-    r"llm|language\s+model|transformer|inference|pytorch|jax|tensorflow|"
-    r"cuda|openai|gpt|neural|machine\s+learning|mlp|diffusion|"
-    r"\brag\b|embedding|\bmo[eE]\b|gpu|distributed|vllm|llama|quantization|"
-    r"fine-?tun|training\s+at\s+scale|kernel|compiler.*ml",
+    r"\bllm\b|language\s+model|openai|\bgpt\b|anthropic|claude|gemini|mistral|"
+    r"agent|agentic|tool\s+use|function\s+calling|langchain|langgraph|autogen|"
+    r"vllm|llama|instruct|instruction|\brag\b|retriev|alignment|RLHF|"
+    r"qlora|lora\b|finetun|fine-tun|kv.cache|speculativ|"
+    r"multimodal|multi-modal|vision.language|vlm|"
+    r"quantiz|inference.*llm|llm.*inference|sglang|tensorrt",
     re.I,
 )
 

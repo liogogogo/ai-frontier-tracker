@@ -34,9 +34,14 @@ class FetcherRegistry:
     def get_all(cls, enabled_only: bool = True) -> Dict[str, BaseFetcher]:
         """获取所有抓取器实例"""
         from ..config import CONFIG
-        
+
+        # firecrawl-only 模式：仅启用 firecrawl 聚合抓取器
+        fetcher_names = list(cls._fetchers.keys())
+        if getattr(CONFIG, "firecrawl_only", False):
+            fetcher_names = [n for n in fetcher_names if n == "firecrawl"]
+
         result = {}
-        for name in cls._fetchers.keys():
+        for name in fetcher_names:
             fetcher = cls.get(name)
             if fetcher:
                 if enabled_only:

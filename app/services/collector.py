@@ -4,6 +4,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Set
 
@@ -11,12 +12,17 @@ from sqlmodel import select
 
 from ..fetchers import FetcherRegistry, FetchResult
 from ..utils.heat import finalize_heat
+from ..utils.dedup_urls import canonicalize_link
 from ..utils.bloom import get_deduplicator
+from ..utils.entity_dict import extract_entities
 from ..services.cache import cache, DatabaseCache
 from ..services.scheduler import get_scheduler
 from ..database import get_session
 from ..models import Article
 from ..config import CONFIG
+
+# arXiv ID 提取正则（匹配 abs 或 pdf 路径中的 YYMM.NNNNN 格式）
+_ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +54,11 @@ class CollectorService:
                 from datetime import timedelta
                 cutoff = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
                 stmt = select(Article.link).where(Article.date >= cutoff)
-                links = [row[0] for row in session.exec(stmt).all() if row[0]]
+                links = [
+                    canonicalize_link(row[0])
+                    for row in session.exec(stmt).all()
+                    if row[0]
+                ]
 
                 # 批量加入 Bloom Filter
                 self.dedup.add_batch(links)
@@ -111,22 +121,43 @@ class CollectorService:
 
         self._last_fetch_summary = self._build_fetch_summary(fetcher_names, fetcher_summaries, len(all_items))
 
+        # URL 规范化后再算热度与去重（避免 abs/pdf、版本号、追踪参数导致重复）
+        for item in all_items:
+            lk = item.get("link") or ""
+            if lk:
+                item["link"] = canonicalize_link(lk)
+
         # 计算热度
         for item in all_items:
             finalize_heat(item)
+
+        # 实体抽取 + arXiv ID 标注
+        for item in all_items:
+            text = f"{item.get('title', '')} {item.get('title', '')} {item.get('title', '')} {item.get('desc', '')}"
+            item["entities"] = extract_entities(text)
+            m = _ARXIV_ID_RE.search(item.get("link", ""))
+            if m:
+                item["arxiv_id"] = m.group(1)
 
         # 去重 - 按热度保留
         by_link = self._deduplicate(all_items)
         items = list(by_link.values())
 
-        paper_min = min(CONFIG.feed_min_papers, CONFIG.feed_max_items // 2)
-        if sum(1 for it in items if it.get("type") == "paper") < paper_min:
+        paper_min = 0 if CONFIG.firecrawl_only else min(CONFIG.feed_min_papers, CONFIG.feed_max_items // 2)
+        if paper_min > 0 and sum(1 for it in items if it.get("type") == "paper") < paper_min:
             exclude: Set[str] = {it.get("link") or "" for it in items}
             exclude.discard("")
             for it in self._papers_from_database(
                 exclude, limit=max(paper_min * 4, 28)
             ):
                 finalize_heat(it)
+                if "entities" not in it:
+                    text = f"{it.get('title', '')} {it.get('title', '')} {it.get('title', '')} {it.get('desc', '')}"
+                    it["entities"] = extract_entities(text)
+                if "arxiv_id" not in it:
+                    m = _ARXIV_ID_RE.search(it.get("link", ""))
+                    if m:
+                        it["arxiv_id"] = m.group(1)
                 lk = it.get("link") or ""
                 if lk and lk not in by_link:
                     by_link[lk] = it
@@ -253,19 +284,22 @@ class CollectorService:
             with get_session() as session:
                 stmt = (
                     select(Article)
-                    .where(Article.type == "paper")
+                    # 仅用真正论文源做兜底：限定 arXiv 链接，避免机构新闻被历史误标为 paper
+                    .where(Article.type == "paper", Article.link.contains("arxiv.org"))
                     .order_by(Article.date.desc(), Article.id.desc())
                     .limit(limit)
                 )
                 rows = list(session.exec(stmt).all())
                 out: List[Dict] = []
+                exclude_c = {canonicalize_link(x) for x in exclude_links if x}
                 for r in rows:
-                    if r.link in exclude_links:
+                    if canonicalize_link(r.link) in exclude_c:
                         continue
                     try:
                         tags = json.loads(r.tags or "[]")
                     except (json.JSONDecodeError, TypeError):
                         tags = []
+                    cl = canonicalize_link(r.link)
                     out.append({
                         "type": "paper",
                         "title": r.title,
@@ -273,7 +307,7 @@ class CollectorService:
                         "tags": tags if isinstance(tags, list) else [],
                         "date": r.date,
                         "venue": r.venue or "arXiv",
-                        "link": r.link,
+                        "link": cl,
                         "heat": r.heat or 0,
                     })
                 return out
@@ -350,7 +384,7 @@ class CollectorService:
         return result[:max_n]
 
     def _cleanup_temp_fields(self, items: List[Dict]):
-        """清理临时字段"""
+        """清理临时字段（entities/arxiv_id 保留至 _persist_items 写库后再移除）"""
         temp_fields = (
             "_hn_points", "_hn_comments",
             "_reddit_score", "_reddit_comments",
@@ -365,13 +399,15 @@ class CollectorService:
                 item.pop(field, None)
 
     def _persist_items(self, items: List[Dict]):
-        """持久化到数据库"""
+        """持久化到数据库，然后移除不对外暴露的分析字段"""
+        _internal_fields = ("entities", "arxiv_id", "heat_breakdown")
         for item in items:
             try:
                 self.db_cache.save_or_update_article(item)
             except Exception:
-                # 忽略单个保存失败
                 pass
+            for f in _internal_fields:
+                item.pop(f, None)
 
     def _record_run(self, duration_ms: int, total_items: int, errors: List[str]):
         """记录运行统计"""

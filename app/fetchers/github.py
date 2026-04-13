@@ -11,13 +11,21 @@ from ..utils.text import infer_tags
 
 
 GITHUB_QUERIES = [
-    "llm inference stars:>2000",
-    "vllm OR tensorrt-llm OR sglang stars:>1500",
-    "langchain OR langgraph stars:>800",
+    # LLM 通用
+    "large language model transformer stars:>1000",
+    # 推理优化
+    "llm inference vllm OR sglang OR tensorrt-llm stars:>1500",
+    "speculative decoding OR kv-cache OR quantization llm stars:>400",
     "llama.cpp OR ggml OR gguf stars:>1200",
-    "PagedAttention OR continuous batching llm stars:>200",
-    "torch.distributed OR FSDP OR DeepSpeed stars:>600",
-    "unsloth OR axolotl OR qlora finetrain stars:>350",
+    # RAG
+    "RAG retrieval augmented generation LLM stars:>600",
+    # Agent
+    "langchain OR langgraph OR crewai agent llm stars:>600",
+    "OpenDevin OR SWE-agent OR openhands OR autogen agent stars:>250",
+    # 多模态
+    "vision language model multimodal LLM stars:>500",
+    # 训练
+    "unsloth OR axolotl OR qlora OR lora LLM finetune stars:>350",
 ]
 
 
@@ -41,7 +49,7 @@ class GitHubFetcher(BaseFetcher):
             max_retries=self.config.max_retries,
             retry_delay=self.config.retry_delay,
             timeout=self.config.timeout,
-            rate_limit_delay=0.3,
+            rate_limit_delay=self.config.rate_limit_delay,
         ) as client:
             
             all_items = []

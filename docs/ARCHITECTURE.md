@@ -248,6 +248,7 @@ sequenceDiagram
 
 ## 10. 部署与运行时
 
+- **HTTP 端口**：本地开发默认 `uvicorn ... --port 8767`（见 README）；Docker Compose 默认将容器内 `8000` 映射到主机 `8767`（`APP_PORT` 可改主机侧端口）。
 - **进程模型**：单 Uvicorn 进程，异步抓取在同一事件循环中由 `asyncio` 协作式调度。
 - **数据库路径**：默认相对工作目录 `./data`；Docker 镜像内通过 `DATABASE_URL=sqlite:////app/data/...` 与卷挂载对齐。
 - **启动行为**：`startup` 尝试执行一轮 `collect_all` 预热缓存，失败则静默跳过，不阻塞服务启动。

@@ -4,7 +4,7 @@
 import time
 import hashlib
 import json
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -12,6 +12,8 @@ from sqlmodel import select
 
 from ..database import get_session
 from ..models import Article
+from ..config import CONFIG
+from ..utils.dedup_urls import canonicalize_link
 
 
 @dataclass
@@ -108,45 +110,64 @@ class DatabaseCache:
             return {hash_to_link[h] for h in results if h in hash_to_link}
     
     @staticmethod
+    def _merge_raw_data(existing_raw: Optional[str], updates: dict) -> str:
+        """将 updates 合并进现有 raw_data JSON，保留未覆盖的已有字段。"""
+        try:
+            d = json.loads(existing_raw) if existing_raw else {}
+        except Exception:
+            d = {}
+        d.update(updates)
+        return json.dumps(d, ensure_ascii=False)
+
+    @staticmethod
     def save_or_update_article(item: dict) -> tuple[bool, bool]:
         """
         保存或更新文章
         返回: (是否是新文章, 是否更新了热度)
         """
         import hashlib
-        import json
 
-        link = item.get("link", "")
+        link = canonicalize_link(item.get("link", "") or "")
         if not link:
             return False, False
-        
+        item["link"] = link
+
         link_hash = hashlib.md5(link.encode()).hexdigest()
-        
+
+        # 组装本次需写入 raw_data 的字段（增量合并，不覆盖其他字段）
+        raw_updates: dict = {}
+        if item.get("heat_breakdown"):
+            raw_updates["heat_breakdown"] = item["heat_breakdown"]
+        if item.get("entities") is not None:
+            raw_updates["entities"] = item["entities"]
+        if item.get("arxiv_id"):
+            raw_updates["arxiv_id"] = item["arxiv_id"]
+
         with get_session() as session:
             # 查询是否存在
             statement = select(Article).where(Article.link_hash == link_hash)
             existing = session.exec(statement).first()
-            
+
             if existing:
-                # 更新
                 is_new = False
                 heat_changed = existing.heat != item.get("heat", 0)
-                
+
+                existing.type = item.get("type", existing.type)
+                existing.title = item.get("title", existing.title)
+                existing.desc = item.get("desc", existing.desc)
+                existing.date = item.get("date", existing.date)
+                existing.venue = item.get("venue", existing.venue)
                 existing.heat = item.get("heat", 0)
                 existing.updated_at = datetime.utcnow()
                 existing.fetch_count += 1
                 existing.last_fetched_at = datetime.utcnow()
                 existing.tags = json.dumps(item.get("tags", []))
-                
-                # 保存热度分解详情
-                if item.get("heat_breakdown"):
-                    existing.raw_data = json.dumps({
-                        "heat_breakdown": item.get("heat_breakdown")
-                    })
-                
+
+                if raw_updates:
+                    existing.raw_data = DatabaseCache._merge_raw_data(existing.raw_data, raw_updates)
+
                 return is_new, heat_changed
             else:
-                # 新建
                 article = Article(
                     link_hash=link_hash,
                     link=link,
@@ -157,7 +178,7 @@ class DatabaseCache:
                     date=item.get("date", ""),
                     venue=item.get("venue", ""),
                     heat=item.get("heat", 0),
-                    raw_data=json.dumps(item.get("heat_breakdown")) if item.get("heat_breakdown") else None,
+                    raw_data=json.dumps(raw_updates, ensure_ascii=False) if raw_updates else None,
                 )
                 session.add(article)
                 return True, False
@@ -166,8 +187,9 @@ class DatabaseCache:
 class CacheManager:
     """组合内存和数据库缓存"""
     
-    def __init__(self, memory_ttl: int = 300):
-        self.memory = MemoryCache(ttl_seconds=memory_ttl)
+    def __init__(self, memory_ttl: Optional[int] = None):
+        ttl = memory_ttl if memory_ttl is not None else CONFIG.cache.ttl_seconds
+        self.memory = MemoryCache(ttl_seconds=ttl)
         self.db = DatabaseCache()
     
     def get_feed(self) -> Optional[list]:
@@ -176,7 +198,7 @@ class CacheManager:
     
     def set_feed(self, items: list) -> None:
         """缓存Feed"""
-        self.memory.set("feed", data=items, ttl=300)
+        self.memory.set("feed", data=items, ttl=self.memory.ttl)
     
     def clear(self):
         """清空所有缓存"""
