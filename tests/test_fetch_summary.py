@@ -43,7 +43,7 @@ class ArxivFetcherTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.source_status["outcome"], "unchanged")
         self.assertTrue(result.source_status["used_cache"])
         self.assertTrue(result.source_status["not_modified"])
-        self.assertIn("未变化(304)", result.status)
+        self.assertIn("304", result.status)
 
 
 class CollectorSummaryTests(unittest.TestCase):

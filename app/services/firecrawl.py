@@ -93,24 +93,191 @@ class FirecrawlService:
         except Exception:
             return None
 
+        from ..utils.crawl_quality import (
+            clean_markdown_noise,
+            score_text_quality,
+            domain_crawl_hints,
+        )
+
         try:
-            # verbose=False 避免污染日志；headless 默认 True
-            async with AsyncWebCrawler(verbose=False) as crawler:
-                result = await crawler.arun(url=url)
-                md = getattr(result, "markdown", "") or ""
-                text = getattr(result, "text", "") or ""
-                html = getattr(result, "cleaned_html", "") or getattr(result, "html", "") or ""
-                meta = getattr(result, "metadata", None) or {}
-                if not isinstance(meta, dict):
-                    meta = {}
-                # only_main_content：Crawl4AI 通常已做主内容抽取，这里仅保持参数一致
-                return {
-                    "markdown": md,
-                    "text": text,
-                    "html": html,
-                    "metadata": meta,
-                    "success": True,
-                }
+            ua = (
+                os.getenv("CRAWL4AI_USER_AGENT", "").strip()
+                or os.getenv("HTTP_USER_AGENT", "").strip()
+                or (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                )
+            )
+
+            page_timeout = int(os.getenv("CRAWL4AI_PAGE_TIMEOUT", "55000"))
+            delay_base = float(os.getenv("CRAWL4AI_DELAY_HTML", "0.65"))
+            bypass_cache = os.getenv("CRAWL4AI_BYPASS_CACHE", "true").lower() in (
+                "1",
+                "true",
+                "yes",
+                "",
+            )
+            process_iframes = os.getenv("CRAWL4AI_PROCESS_IFRAMES", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            headless = os.getenv("CRAWL4AI_HEADLESS", "true").lower() in (
+                "1",
+                "true",
+                "yes",
+                "",
+            )
+            simulate_retry = os.getenv("CRAWL4AI_SIMULATE_USER", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            use_smart_wait = os.getenv("CRAWL4AI_USE_SMART_WAIT", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+
+            headers = {
+                "Accept-Language": os.getenv(
+                    "CRAWL4AI_ACCEPT_LANGUAGE",
+                    "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+                ),
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                    "image/avif,image/webp,*/*;q=0.8"
+                ),
+            }
+
+            hints = domain_crawl_hints(url)
+            selectors_env = os.getenv("CRAWL4AI_CSS_SELECTORS", "").strip()
+            if selectors_env:
+                selectors = [s.strip() for s in selectors_env.split(",") if s.strip()]
+            else:
+                selectors = list(hints["selectors_priority"])
+
+            extra_delay = float(hints.get("extra_delay") or 0.0)
+            delay_html = max(0.0, delay_base + extra_delay)
+            wait_for_hint = hints.get("wait_for")
+
+            candidates: List[tuple] = []
+
+            def _result_to_dict(result: Any) -> Dict[str, Any]:
+                if result is None:
+                    return {}
+                if hasattr(result, "model_dump"):
+                    return result.model_dump()
+                if hasattr(result, "dict"):
+                    return result.dict()
+                return {}
+
+            async with AsyncWebCrawler(
+                verbose=False,
+                user_agent=ua,
+                headers=headers,
+                headless=headless,
+            ) as crawler:
+
+                async def _try_run(
+                    label: str,
+                    *,
+                    css_selector: Optional[str],
+                    word_count_threshold: int,
+                    wait_for: Optional[str] = None,
+                    simulate_user: bool = False,
+                    extra: Optional[Dict[str, Any]] = None,
+                ) -> None:
+                    kwargs: Dict[str, Any] = {
+                        "url": url,
+                        "verbose": False,
+                        "user_agent": ua,
+                        "word_count_threshold": word_count_threshold,
+                        "bypass_cache": bypass_cache,
+                        "page_timeout": page_timeout,
+                        "delay_before_return_html": delay_html,
+                    }
+                    if only_main_content and css_selector:
+                        kwargs["css_selector"] = css_selector
+                    else:
+                        kwargs["css_selector"] = None
+                    if wait_for:
+                        kwargs["wait_for"] = wait_for
+                    if process_iframes:
+                        kwargs["process_iframes"] = True
+                    if simulate_user:
+                        kwargs["simulate_user"] = True
+                    if extra:
+                        kwargs.update(extra)
+                    try:
+                        raw = await crawler.arun(**kwargs)
+                    except Exception:
+                        return
+                    d = _result_to_dict(raw)
+                    if not d:
+                        return
+                    md_raw = (d.get("markdown") or "").strip()
+                    if not md_raw and not (d.get("html") or "").strip():
+                        return
+                    md = clean_markdown_noise(md_raw)
+                    if not md:
+                        return
+                    sc = score_text_quality(md)
+                    candidates.append((label, md, sc, d))
+
+                # 1) 主路径：优先域名相关的前几个 selector，中等阈值（减少无效全文噪声）
+                for sel in selectors[:5]:
+                    await _try_run(f"css:{sel}", css_selector=sel, word_count_threshold=42)
+
+                # 2) 不截断主区域：整页低阈值兜底（博客侧栏有时在 main 外）
+                await _try_run("full:none", css_selector=None, word_count_threshold=14)
+
+                # 3) 可选：等待主内容出现（GitHub README / SPA 博客）
+                if use_smart_wait and wait_for_hint:
+                    await _try_run(
+                        "wait+main",
+                        css_selector=selectors[0] if selectors else None,
+                        word_count_threshold=35,
+                        wait_for=wait_for_hint,
+                    )
+
+                # 4) 仍偏弱时：模拟用户滚动/点击（更慢，仅按需）
+                best_score = max((c[2] for c in candidates), default=0.0)
+                if simulate_retry and best_score < float(
+                    os.getenv("CRAWL4AI_SIMULATE_MIN_SCORE", "220")
+                ):
+                    await _try_run(
+                        "simulate",
+                        css_selector=None,
+                        word_count_threshold=12,
+                        simulate_user=True,
+                    )
+
+            if not candidates:
+                return None
+
+            # 取质量分最高的一条；同分取长文
+            ranked = sorted(candidates, key=lambda x: (x[2], len(x[1])), reverse=True)
+            label, md_best, sc_best, d_best = ranked[0]
+
+            meta = d_best.get("metadata") or {}
+            if not isinstance(meta, dict):
+                meta = {}
+            if not meta.get("title"):
+                meta["title"] = meta.get("og:title") or meta.get("twitter:title") or ""
+            meta["crawl4ai_pick"] = label
+            meta["crawl4ai_score"] = round(sc_best, 2)
+
+            html = (d_best.get("cleaned_html") or d_best.get("html") or "").strip()
+            ext = (d_best.get("extracted_content") or "").strip()
+
+            return {
+                "markdown": md_best,
+                "text": clean_markdown_noise(ext) if ext else md_best[:4000],
+                "html": html,
+                "metadata": meta,
+                "success": bool(d_best.get("success", True)),
+            }
         except Exception:
             return None
     

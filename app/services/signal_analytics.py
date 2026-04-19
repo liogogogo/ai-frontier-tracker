@@ -115,10 +115,14 @@ def aggregate_entities(
     hist_counts: Dict[str, int] = defaultdict(int)
     for art in historical_articles:
         for eid in (art.get("entities") or []):
+            meta = ENTITY_META.get(eid)
+            # 如果指定了 category_filter，跳过不匹配的实体
             if category_filter:
-                meta = ENTITY_META.get(eid)
                 if not meta or meta["category"] != category_filter:
                     continue
+            # 没有 meta 的实体不计入（避免未知实体污染统计）
+            elif not meta:
+                continue
             hist_counts[eid] += 1
 
     # 组装结果

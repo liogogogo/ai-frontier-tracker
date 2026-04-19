@@ -76,8 +76,9 @@ docker run --rm -p 8767:8000 -v ai_news_data:/app/data ai-frontier-tracker
 | `MODELVERSE_API_KEY` / `MODELVERSE_MODEL` | 兼容国内模型 API                             |
 | `ENHANCE_PROVIDER`                        | `/api/enhance`、`/api/scrape` 增强服务：`auto|crawl4ai|firecrawl` |
 | `FIRECRAWL_API_KEY`                       | 可选：使用 Firecrawl 托管抓取（有额度时）    |
+| `CRAWL4AI_*`                              | Crawl4AI 抓取：超时、延迟、CSS 主内容、智能等待、模拟用户等（见 [.env.example](.env.example)） |
 
-未配置 LLM / Firecrawl 时，对应接口会降级或返回提示，不影响主 Feed。
+未配置 LLM / Firecrawl 时，对应接口会降级或返回提示，不影响主 Feed。使用 Crawl4AI 时需本地安装 Chromium（`python -m playwright install chromium`），详见 [.env.example](.env.example)。
 
 ## API 一览
 

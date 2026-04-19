@@ -25,14 +25,18 @@ _RSS_HTTP_HEADERS = {
 
 
 # RSS订阅源配置 - 支持论文源标记
+# 优化说明：
+#   - Google 家族合并为 3 个核心源，避免重复
+#   - 新增 TechCrunch AI、VentureBeat AI 捕捉产品/融资动向
 RSS_FEEDS = [
     # 新闻源 (type=news)
     ("OpenAI Blog", "https://openai.com/blog/rss.xml", 8, "news"),
     ("Google / DeepMind Blog", "https://blog.google/innovation-and-ai/models-and-research/google-deepmind/rss/", 8, "news"),
-    ("DeepMind", "https://deepmind.google/blog/rss.xml", 8, "news"),
-    # 路径须为 innovation-and-ai；innovation-ai/.../rss 会 404
-    ("Google AI Blog", "https://blog.google/innovation-and-ai/technology/ai/rss/", 8, "news"),
-    ("Google Cloud — AI & ML", "https://cloudblog.withgoogle.com/products/ai-machine-learning/rss/", 8, "news"),
+    # 保留 DeepMind 独立源（DeepMind 专属研究公告，与 Google/DeepMind 合并博客互补）
+    ("DeepMind", "https://deepmind.google/blog/rss.xml", 6, "news"),
+    # Google AI 技术博客（合并原 Google AI Blog + Google Research Blog + Google Developers AI 三源为一）
+    ("Google AI & Research", "https://blog.google/innovation-and-ai/technology/ai/rss/", 8, "news"),
+    ("Google Cloud — AI & ML", "https://cloudblog.withgoogle.com/products/ai-machine-learning/rss/", 6, "news"),
     ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml", 8, "news"),
     ("NVIDIA Blog", "https://blogs.nvidia.com/feed/", 7, "news"),
     ("AWS Machine Learning Blog", "https://aws.amazon.com/blogs/machine-learning/feed/", 7, "news"),
@@ -44,11 +48,9 @@ RSS_FEEDS = [
     ("BAIR", "https://bair.berkeley.edu/blog/feed.xml", 10, "news"),
     # Stanford HAI（机构资讯流，归类为 news）
     ("Stanford HAI", "https://hai.stanford.edu/news?format=rss", 8, "news"),
-    # 研究机构官方研究博客（经可访问性校验，偏论文与实验室成果叙事）
-    ("Google Research Blog", "https://blog.research.google/feeds/posts/default", 8, "news"),
-    ("Microsoft Research", "https://www.microsoft.com/en-us/research/feed/", 8, "news"),
+    ("Microsoft Research", "https://www.microsoft.com/en-us/research/feed/", 7, "news"),
     ("Apple ML Research", "https://machinelearning.apple.com/rss.xml", 7, "news"),
-    # 新增源（官方 /blog/rss、mistral feed、allenai feed 曾 404，改用可用地址）
+    # Anthropic / xAI（通过 GitHub 托管的 RSS）
     (
         "Anthropic News",
         "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml",
@@ -59,11 +61,9 @@ RSS_FEEDS = [
         "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_xainews.xml",
         6, "news",
     ),
-    (
-        "Google Developers — AI",
-        "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_google_ai.xml",
-        6, "news",
-    ),
+    # 新增：AI 产品发布与行业动向
+    ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/", 7, "news"),
+    ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/", 6, "news"),
 ]
 
 

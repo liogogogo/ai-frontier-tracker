@@ -11,9 +11,8 @@ BIG_TECH_RSS_VENUES: FrozenSet[str] = frozenset({
     "OpenAI Blog",
     "Google / DeepMind Blog",
     "DeepMind",
-    "Google AI Blog",
+    "Google AI & Research",
     "Google Cloud — AI & ML",
-    "Google Developers — AI",
     "Hugging Face Blog",
     "NVIDIA Blog",
     "AWS Machine Learning Blog",
@@ -25,7 +24,6 @@ BIG_TECH_RSS_VENUES: FrozenSet[str] = frozenset({
 
 # 顶会/实验室研究叙事（非产品稿为主；与 BIG_TECH 官宣区分）
 RESEARCH_LAB_RSS_VENUES: FrozenSet[str] = frozenset({
-    "Google Research Blog",
     "Microsoft Research",
     "Apple ML Research",
     "BAIR",
@@ -49,35 +47,71 @@ def days_since_iso(date_str: Optional[str]) -> float:
 
 
 def recency_uplift(days: float) -> float:
-    """越新越接近1，约90天降至~0.1"""
-    return max(0.1, 1.0 - min(days, 120.0) / 130.0)
+    """指数衰减：当天 1.0，7天 0.78，30天 0.41，90天 0.15，120天 0.1（最低值）。
+    比线性衰减更平滑，避免'第29天突然大幅降分'的断崖效应。"""
+    return max(0.1, math.exp(-days / 28.0))
 
 
 def engineering_topic_score(text: str) -> int:
-    """工程/LLM关键词加分"""
+    """工程/LLM关键词加分 — 按语义组去重，每组只取最高命中，避免同义重复叠加。"""
     t = (text or "").lower()
     acc = 0
-    
-    patterns = [
+
+    # 第1组：LLM/基础模型（取命中中最高分，不叠加）
+    llm_matches = [
         (r"\bllm\b", 22),
-        (r"language model", 22),
+        (r"\bgpt[-\s]?4[o]?\b", 18),
+        (r"language model", 20),
+        (r"\bfoundation model", 16),
+    ]
+    acc += max((w for pat, w in llm_matches if re.search(pat, t)), default=0)
+
+    # 第2组：Agent/工具调用（同组不叠加）
+    agent_matches = [
         (r"\bagent\b|agentic|tool.use|function.calling", 18),
+        (r"autonomous|multi.agent", 14),
+    ]
+    acc += max((w for pat, w in agent_matches if re.search(pat, t)), default=0)
+
+    # 第3组：推理/优化（可叠加，但组内去重）
+    inference_matches = [
         (r"inference", 16),
         (r"quantiz", 14),
-        (r"\brag\b|retriev", 16),
-        (r"\bmo[eE]\b|mixture of expert", 15),
-        (r"RLHF|alignment|preference|DPO", 14),
-        (r"flash.?attn|kv.?cache|paged.?attention", 16),
-        (r"instruct|instruction.tun", 14),
-        (r"\bgpu\b|cuda|triton", 10),
-        (r"transformer", 8),
+        (r"flash.?attn|kv.?cache|paged.?attention|speculativ.*decod", 16),
+        (r"\bspeculative\b", 10),
     ]
-    
-    for pat, w in patterns:
+    # 使用 set 去重：同一关键词匹配多次只算一次
+    matched_groups = set()
+    for pat, w in inference_matches:
         if re.search(pat, t):
-            acc += w
-    
-    return min(100, acc)
+            matched_groups.add(w)
+    acc += sum(matched_groups)
+
+    # 第4组：RAG/检索
+    rag_matches = [
+        (r"\brag\b|retriev", 16),
+        (r"hybrid.search|rerank|vector.?database", 12),
+    ]
+    acc += max((w for pat, w in rag_matches if re.search(pat, t)), default=0)
+
+    # 第5组：训练/对齐
+    training_matches = [
+        (r"RLHF|alignment|preference|DPO", 14),
+        (r"instruct|instruction.tun", 14),
+        (r"SFT|supervised.fine.tun", 12),
+        (r"LoRA|QLoRA|parameter.efficient", 10),
+    ]
+    acc += max((w for pat, w in training_matches if re.search(pat, t)), default=0)
+
+    # 第6组：架构/基础设施
+    arch_matches = [
+        (r"\bmo[eE]\b|mixture.of.expert", 15),
+        (r"transformer", 8),
+        (r"\bgpu\b|cuda|triton", 10),
+    ]
+    acc += max((w for pat, w in arch_matches if re.search(pat, t)), default=0)
+
+    return min(60, acc)
 
 
 def finalize_heat(item: dict) -> None:
@@ -215,26 +249,26 @@ def finalize_heat(item: dict) -> None:
         })
     
     elif v in BIG_TECH_RSS_VENUES:
-        ch = 415
-        total = int(ch + int(205 * rec) + int(topic * 0.32))
+        ch = 280
+        total = int(ch + int(180 * rec) + int(topic * 0.50))
         bd.update({
             "channel": "bigtech_official_rss",
             "channel_floor": ch,
-            "recency_points": int(205 * rec),
+            "recency_points": int(180 * rec),
         })
 
     elif v in RESEARCH_LAB_RSS_VENUES:
-        ch = 355
-        total = int(ch + int(188 * rec) + int(topic * 0.30))
+        ch = 230
+        total = int(ch + int(165 * rec) + int(topic * 0.45))
         bd.update({
             "channel": "research_lab_rss",
             "channel_floor": ch,
-            "recency_points": int(188 * rec),
+            "recency_points": int(165 * rec),
         })
 
     else:
-        ch = 175
-        total = int(ch + int(130 * rec) + int(topic * 0.25))
+        ch = 155
+        total = int(ch + int(110 * rec) + int(topic * 0.40))
         bd.update({
             "channel": "rss_general",
             "channel_floor": ch,

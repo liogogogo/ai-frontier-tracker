@@ -208,6 +208,108 @@ def get_stats():
         }
 
 
+@app.get("/api/analytics/aggregate")
+def get_analytics_aggregate(
+    days: int = Query(
+        _ANALYTICS.default_word_freq_days,
+        ge=1,
+        le=_ANALYTICS.max_days,
+    ),
+    article_type: Optional[str] = Query(
+        None, description="paper | news | repo；省略表示全部"
+    ),
+    entity_category: Optional[str] = Query(
+        None, description="model|technique|tool|org|benchmark"
+    ),
+    top_k: int = Query(50, ge=1, le=_ANALYTICS.max_top_k),
+    convergence_days: int = Query(30, ge=1, le=180),
+    convergence_min_sources: int = Query(2, ge=2, le=3),
+):
+    """
+    聚合分析端点 —— 一次请求返回词频、趋势、实体、涌现、收敛 5 组数据。
+
+    相比分别调用 5 个端点：
+      - DB 查询从 5 次降为 2 次（近期 + 历史）
+      - 数据加载一次，复用于所有分析
+      - 前端只需发 1 个 HTTP 请求
+    """
+    # 处理空串 article_type
+    if article_type is not None:
+        article_type = article_type.strip() or None
+    if article_type is not None and article_type not in _ANALYTICS.allowed_article_types:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "article_type must be one of: "
+                + ", ".join(sorted(_ANALYTICS.allowed_article_types))
+            ),
+        )
+    if entity_category is not None and entity_category not in {"model", "technique", "tool", "org", "benchmark"}:
+        raise HTTPException(status_code=422, detail="entity_category must be one of: model, technique, tool, org, benchmark")
+
+    recent_days = _ANALYTICS.default_trend_recent_days
+    compare_days = _ANALYTICS.default_trend_compare_days
+
+    from sqlmodel import select
+    from .database import get_session
+    from .models import Article
+    from .utils.text_analysis import analyze_articles, get_trending_words
+    from .services.signal_analytics import aggregate_entities, detect_emergence, build_convergence_cards, _article_to_dict
+    from datetime import datetime, timedelta
+
+    import json as _json_agg
+
+    def _to_dict_word(a: Article):
+        try:
+            tags = _json_agg.loads(a.tags) if a.tags and a.tags.strip().startswith("[") else [t for t in (a.tags or "").split(",") if t]
+        except Exception:
+            tags = []
+        return {
+            "title": a.title, "desc": a.desc, "type": a.type, "date": a.date,
+            "tags": tags, "heat": a.heat, "venue": a.venue,
+        }
+
+    with get_session() as session:
+        now = datetime.now()
+        word_cutoff = (now - timedelta(days=days)).strftime("%Y-%m-%d")
+        recent_cutoff = (now - timedelta(days=recent_days)).strftime("%Y-%m-%d")
+        hist_cutoff = (now - timedelta(days=compare_days)).strftime("%Y-%m-%d")
+        conv_cutoff = (now - timedelta(days=convergence_days)).strftime("%Y-%m-%d")
+
+        # 词频查询
+        stmt_word = select(Article).where(Article.date >= word_cutoff)
+        if article_type:
+            stmt_word = stmt_word.where(Article.type == article_type)
+        word_articles = [_to_dict_word(a) for a in session.exec(stmt_word).all()]
+
+        # 趋势/实体/涌现：近期 + 历史
+        recent_articles = [_article_to_dict(a) for a in session.exec(select(Article).where(Article.date >= recent_cutoff)).all()]
+        hist_articles = [_article_to_dict(a) for a in session.exec(select(Article).where(
+            Article.date >= hist_cutoff, Article.date < recent_cutoff
+        )).all()]
+
+        # 收敛：需要更宽的时间窗
+        conv_articles = [_article_to_dict(a) for a in session.exec(select(Article).where(Article.date >= conv_cutoff)).all()]
+
+    # 分析
+    word_freq_result = analyze_articles(word_articles, top_k=top_k)
+    trending = get_trending_words(recent_articles, hist_articles, top_k=15)
+    entities = aggregate_entities(recent_articles, hist_articles, top_k=18, category_filter=entity_category or None)
+    emerged = detect_emergence(recent_articles, hist_articles, top_k=12, min_recent_mentions=1)
+    convergence = build_convergence_cards(conv_articles, min_source_types=convergence_min_sources, top_k=10)
+
+    return {
+        "query": {"days": days, "article_type": article_type, "entity_category": entity_category, "top_k": top_k},
+        "recent_count": len(recent_articles),
+        "historical_count": len(hist_articles),
+        "word_freq": word_freq_result,
+        "trending": trending,
+        "entities": entities,
+        "emergence": emerged,
+        "convergence": convergence,
+    }
+
+
 @app.get("/api/analytics/word-freq")
 def get_word_frequency(
     days: int = Query(
@@ -798,7 +900,9 @@ async def enhance_article(
     from .services.firecrawl import get_firecrawl_service
     
     service = get_firecrawl_service()
-    result = await service.enhance_article(title, url, desc)
+    import asyncio
+    # 抓取可能较慢（首次启动 Playwright/浏览器等），给一个硬超时避免前端卡死
+    result = await asyncio.wait_for(service.enhance_article(title, url, desc), timeout=25.0)
     
     # 标记来源
     prov = (service.config.provider or "auto").lower()
@@ -835,7 +939,11 @@ async def scrape_url(
     from .services.firecrawl import get_firecrawl_service
     
     service = get_firecrawl_service()
-    result = await service.scrape(url, only_main_content=only_main_content, formats=["markdown", "text"])
+    import asyncio
+    result = await asyncio.wait_for(
+        service.scrape(url, only_main_content=only_main_content, formats=["markdown", "text"]),
+        timeout=25.0,
+    )
     
     if result:
         return {

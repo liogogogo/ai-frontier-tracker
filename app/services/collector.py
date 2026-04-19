@@ -23,6 +23,8 @@ from ..config import CONFIG
 
 # arXiv ID 提取正则（匹配 abs 或 pdf 路径中的 YYMM.NNNNN 格式）
 _ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", re.IGNORECASE)
+# 补充：匹配 "arXiv:2401.12345" 或 "arxiv.org/abs/2401.12345" 等 mention 格式
+_ARXIV_ID_MENTION_RE = re.compile(r"(?:arxiv\.org/(?:abs|pdf)/|arxiv:?\s*)(\d{4}\.\d{4,5})", re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
@@ -131,11 +133,18 @@ class CollectorService:
         for item in all_items:
             finalize_heat(item)
 
-        # 实体抽取 + arXiv ID 标注
+        # 跨源收敛信号加权（同一内容在多个渠道出现时加分）
+        self._apply_cross_source_bonus(all_items)
+
+        # 实体抽取 + arXiv ID 标注（从 link/title/desc 三处提取）
         for item in all_items:
             text = f"{item.get('title', '')} {item.get('title', '')} {item.get('title', '')} {item.get('desc', '')}"
             item["entities"] = extract_entities(text)
+            # 从 link 提取
             m = _ARXIV_ID_RE.search(item.get("link", ""))
+            if not m:
+                # 从 title 和 desc 中提取（捕捉 HN/Reddit 帖子中提到的 arXiv 论文，支持 arXiv:YYMM.NNNNN 格式）
+                m = _ARXIV_ID_MENTION_RE.search(f"{item.get('title', '')} {item.get('desc', '')}")
             if m:
                 item["arxiv_id"] = m.group(1)
 
@@ -313,6 +322,84 @@ class CollectorService:
                 return out
         except Exception:
             return []
+
+    def _apply_cross_source_bonus(self, items: List[Dict]) -> None:
+        """
+        跨源收敛信号加权。
+
+        当同一个主题（通过 arXiv ID 或标题关键词匹配）在多个渠道出现时，
+        说明形成了"论文 → 开源 → 社区讨论"的完整链路，给予热度加成。
+
+        策略：
+        1. 按 arXiv ID 分组 → 跨 2+ 渠道的 +60 分
+        2. 按标题关键词分组（去除停用词后的公共词）→ 跨 3+ 渠道的 +30 分
+        """
+        # 策略 1：arXiv ID 跨源匹配
+        arxiv_groups: Dict[str, List[Dict]] = {}
+        for item in items:
+            aid = item.get("arxiv_id")
+            if aid:
+                arxiv_groups.setdefault(aid, []).append(item)
+
+        for aid, group in arxiv_groups.items():
+            if len(group) < 2:
+                continue
+            channels = {item.get("venue") for item in group}
+            if len(channels) >= 2:
+                bonus = 60
+                for item in group:
+                    bd = item.get("heat_breakdown") or {}
+                    old_heat = item.get("heat", 0)
+                    bd["cross_source_bonus"] = bonus
+                    new_heat = min(999, old_heat + bonus)
+                    item["heat"] = new_heat
+                    bd["total"] = new_heat
+                    item["heat_breakdown"] = bd
+
+        # 策略 2：标题关键词跨源匹配（仅针对非 arXiv ID 匹配的）
+        _STOP_WORDS = frozenset({
+            "the", "a", "an", "of", "for", "in", "on", "with", "to", "and",
+            "or", "is", "are", "was", "were", "new", "how", "what", "from",
+            "by", "at", "its", "that", "this", "llm", "llms", "model",
+            "models", "ai", "using", "based", "large", "language",
+        })
+        # 按渠道分组已匹配的链接，避免重复
+        matched_links: Set[str] = set()
+        for _, group in arxiv_groups.items():
+            for item in group:
+                matched_links.add(item.get("link", ""))
+
+        # 提取标题中的有效关键词
+        def _title_keywords(title: str) -> frozenset:
+            words = re.findall(r"[a-zA-Z]{3,}", title.lower())
+            return frozenset(w for w in words if w not in _STOP_WORDS)
+
+        # 按关键词分组
+        kw_groups: Dict[frozenset, List[Dict]] = {}
+        for item in items:
+            link = item.get("link", "")
+            if link in matched_links:
+                continue
+            kws = _title_keywords(item.get("title", ""))
+            if len(kws) >= 2:
+                kw_groups.setdefault(kws, []).append(item)
+
+        for kws, group in kw_groups.items():
+            if len(group) < 3:
+                continue
+            channels = {item.get("venue") for item in group}
+            if len(channels) >= 3:
+                bonus = 30
+                for item in group:
+                    bd = item.get("heat_breakdown") or {}
+                    old_heat = item.get("heat", 0)
+                    # 避免与 arXiv 跨源加成叠加
+                    if "cross_source_bonus" not in bd:
+                        bd["cross_source_bonus"] = bonus
+                        new_heat = min(999, old_heat + bonus)
+                        item["heat"] = new_heat
+                        bd["total"] = new_heat
+                        item["heat_breakdown"] = bd
 
     def _deduplicate(self, items: List[Dict]) -> Dict[str, Dict]:
         """按链接去重，保留热度更高者"""

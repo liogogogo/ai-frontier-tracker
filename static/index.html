@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI 前沿追踪</title>
+    <meta name="description" content="聚合 arXiv、大厂技术博客、Hacker News、Reddit、GitHub 等渠道的 AI/LLM 前沿动态，按热度排序，提供词频分析与趋势洞察。" />
+    <meta property="og:title" content="AI 前沿追踪" />
+    <meta property="og:description" content="聚合 arXiv、大厂技术博客、Hacker News、Reddit、GitHub 等渠道的 AI/LLM 前沿动态，按热度排序，提供词频分析与趋势洞察。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="AI 前沿追踪" />
+    <meta name="twitter:description" content="聚合多源 AI/LLM 前沿动态，按热度排序，提供趋势分析。" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='28' font-size='28'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -801,6 +810,271 @@
         line-height: 1.7;
       }
 
+      /* ── Dark Mode Toggle ── */
+      .theme-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-surface);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.2s var(--ease-out-expo);
+        flex-shrink: 0;
+      }
+      .theme-toggle:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        transform: translateY(-1px);
+      }
+      .theme-toggle svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ── Skeleton Loading ── */
+      .skeleton-card {
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem 1.5rem;
+        box-shadow: var(--shadow-card);
+      }
+      .skeleton-line {
+        border-radius: 4px;
+        background: var(--color-bg-inset);
+        position: relative;
+        overflow: hidden;
+      }
+      .skeleton-line::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--color-bg-elevated),
+          transparent
+        );
+        animation: shimmer 1.8s infinite;
+      }
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .skeleton-meta {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .skeleton-meta .skeleton-line {
+        height: 18px;
+        width: 60px;
+        border-radius: 9px;
+      }
+      .skeleton-title {
+        height: 20px;
+        width: 85%;
+        margin-bottom: 10px;
+      }
+      .skeleton-desc {
+        height: 14px;
+        margin-bottom: 6px;
+      }
+      .skeleton-desc:last-child {
+        width: 60%;
+      }
+      .skeleton-tags {
+        display: flex;
+        gap: 6px;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--color-border-subtle);
+      }
+      .skeleton-tags .skeleton-line {
+        height: 20px;
+        width: 50px;
+        border-radius: 10px;
+      }
+
+      /* ── Card Accessibility ── */
+      .card-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+      }
+      .card-link:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-lg);
+      }
+
+      /* ── Copy Link Button ── */
+      .copy-link-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-subtle);
+        background: var(--color-bg-surface);
+        color: var(--color-text-tertiary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transform: scale(0.8);
+        transition: all 0.2s var(--ease-out-expo);
+        z-index: 2;
+        font-size: 13px;
+      }
+      .card:hover .copy-link-btn {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .copy-link-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .copy-link-btn.copied {
+        color: #16a34a;
+        border-color: #16a34a;
+      }
+
+      /* ── Relative Date ── */
+      .date-label[title] {
+        cursor: help;
+        text-decoration: underline dotted var(--color-border);
+        text-underline-offset: 2px;
+      }
+
+      /* ── Pagination ── */
+      .pagination {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 2rem 0;
+      }
+      .pagination-btn {
+        padding: 10px 28px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-surface);
+        color: var(--color-text-primary);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        font-family: var(--font-body);
+        transition: all 0.2s var(--ease-out-expo);
+      }
+      .pagination-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft);
+        transform: translateY(-1px);
+      }
+      .pagination-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .pagination-info {
+        font-size: 12px;
+        color: var(--color-text-tertiary);
+        font-family: var(--font-mono);
+      }
+
+      /* ── Back to Top ── */
+      .back-to-top {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-surface);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        box-shadow: var(--shadow-elevated);
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all 0.3s var(--ease-out-expo);
+        pointer-events: none;
+        z-index: 100;
+      }
+      .back-to-top.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .back-to-top:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      /* ── Digest Loading Spinner ── */
+      .digest-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--color-border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+        margin-right: 8px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* ── Analytics Collapse ── */
+      .analytics-section-toggle {
+        background: none;
+        border: none;
+        color: var(--color-text-tertiary);
+        cursor: pointer;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        transition: all 0.2s;
+      }
+      .analytics-section-toggle:hover {
+        background: var(--color-bg-inset);
+        color: var(--color-text-secondary);
+      }
+      .analytics-collapsible {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.4s var(--ease-out-expo);
+      }
+      .analytics-collapsible.expanded {
+        max-height: none;
+      }
+      .analytics-collapsible-inner {
+        padding-top: 1rem;
+      }
+
       /* ═══════════════════════════════════════════
          ANALYTICS TAB
          ═══════════════════════════════════════════ */
@@ -1158,6 +1432,15 @@
         font-family: var(--font-mono);
         font-size: 11px;
       }
+      .trending-new {
+        display: inline-block;
+        background: #16a34a22;
+        color: #16a34a;
+        font-weight: 600;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
 
       @media (prefers-color-scheme: dark) {
         .trending-up {
@@ -1273,6 +1556,14 @@
             <button type="button" class="tab" data-tab="analytics" role="tab">
               分析
             </button>
+            <button type="button" class="theme-toggle" id="theme-toggle" title="切换深色/浅色模式">
+              <svg class="icon-sun" viewBox="0 0 24 24" style="display:none">
+                <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+              <svg class="icon-moon" viewBox="0 0 24 24">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -1295,7 +1586,7 @@
             <div class="insights-title">本期速览</div>
             <div class="weekly-digest-meta" id="weekly-digest-meta"></div>
             <p class="weekly-digest-body" id="weekly-digest-body">
-              加载列表后将显示中文周评与词频…
+              <span class="digest-spinner"></span>加载中…
             </p>
             <div class="digest-kw-label">
               高频词（英文，来自当前列表标题/摘要，点击填入搜索）
@@ -1337,6 +1628,10 @@
 
           <div class="count-label" id="count-label">显示 0 条内容</div>
           <div class="grid" id="card-grid"></div>
+          <div class="pagination" id="pagination" hidden>
+            <button type="button" class="pagination-btn" id="btn-load-more">加载更多</button>
+            <span class="pagination-info" id="pagination-info"></span>
+          </div>
         </div>
 
         <!-- Analytics View -->
@@ -1370,6 +1665,12 @@
       </div>
     </div>
 
+    <button type="button" class="back-to-top" id="back-to-top" title="回到顶部" aria-label="回到顶部">
+      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"/>
+      </svg>
+    </button>
+
     <script>
       /* file:// 打开静态页时请求本地 API；无 CORS 时请改用 http://127.0.0.1:8767/ */
       const API_BASE = (() => {
@@ -1388,6 +1689,136 @@
       let activeFilters = new Set(["all"]);
       let searchQuery = "";
 
+      // ── Pagination State ──
+      const PAGE_SIZE = 30;
+      const PAGE_LOAD_MORE = 20;
+      let visibleCount = PAGE_SIZE;
+
+      // ── Relative Time ──
+      function relativeTime(dateStr) {
+        if (!dateStr) return "";
+        const now = new Date();
+        const then = new Date(dateStr);
+        if (isNaN(then.getTime())) return dateStr;
+        const diff = now - then;
+        const mins = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+        if (mins < 1) return "刚刚";
+        if (mins < 60) return `${mins}分钟前`;
+        if (hours < 24) return `${hours}小时前`;
+        if (days < 7) return `${days}天前`;
+        if (days < 30) return `${Math.floor(days / 7)}周前`;
+        return dateStr.slice(0, 10);
+      }
+
+      // ── URL State (Hash) ──
+      function saveUrlState() {
+        const parts = [];
+        if (activeTab !== "all") parts.push("tab=" + activeTab);
+        if (searchQuery) parts.push("q=" + encodeURIComponent(searchQuery));
+        if (!activeFilters.has("all")) {
+          parts.push("f=" + [...activeFilters].join(","));
+        }
+        const hash = parts.length ? "#" + parts.join("&") : "";
+        history.replaceState(null, "", window.location.pathname + hash);
+      }
+
+      function restoreUrlState() {
+        const hash = window.location.hash.slice(1);
+        if (!hash) return;
+        const params = new URLSearchParams(hash);
+        if (params.has("tab")) {
+          const tab = params.get("tab");
+          if (["all", "paper", "news", "repo", "analytics"].includes(tab)) {
+            activeTab = tab;
+            const tabBtn = document.querySelector(`.tab[data-tab="${tab}"]`);
+            if (tabBtn) {
+              document.querySelectorAll(".tab").forEach((t) => {
+                t.classList.toggle("active", t === tabBtn);
+                t.setAttribute("aria-selected", t === tabBtn ? "true" : "false");
+              });
+              if (tab === "analytics") {
+                document.getElementById("analytics-view").classList.add("active");
+                document.getElementById("feed-view").classList.remove("active");
+              } else {
+                document.getElementById("feed-view").classList.add("active");
+                document.getElementById("analytics-view").classList.remove("active");
+              }
+            }
+          }
+        }
+        if (params.has("q")) {
+          searchQuery = decodeURIComponent(params.get("q"));
+          document.getElementById("search-input").value = searchQuery;
+        }
+        if (params.has("f")) {
+          const filters = params.get("f").split(",");
+          activeFilters = new Set(filters);
+          document.querySelectorAll(".filter-chip").forEach((c) => {
+            c.classList.toggle("active", activeFilters.has(c.dataset.filter));
+          });
+        }
+      }
+
+      // ── Dark Mode Toggle ──
+      function getThemePreference() {
+        const stored = localStorage.getItem("theme");
+        if (stored === "dark" || stored === "light") return stored;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+
+      function applyTheme(mode) {
+        const root = document.documentElement;
+        if (mode === "dark") {
+          root.style.colorScheme = "dark";
+        } else {
+          root.style.colorScheme = "light";
+        }
+        localStorage.setItem("theme", mode);
+        const sun = document.querySelector(".icon-sun");
+        const moon = document.querySelector(".icon-moon");
+        if (sun && moon) {
+          sun.style.display = mode === "dark" ? "block" : "none";
+          moon.style.display = mode === "dark" ? "none" : "block";
+        }
+      }
+
+      function initTheme() {
+        const pref = getThemePreference();
+        applyTheme(pref);
+        document.getElementById("theme-toggle")?.addEventListener("click", () => {
+          const current = localStorage.getItem("theme") || getThemePreference();
+          applyTheme(current === "dark" ? "light" : "dark");
+        });
+      }
+
+      // ── Copy Link ──
+      function copyLink(url, btn) {
+        navigator.clipboard.writeText(url).then(() => {
+          btn.classList.add("copied");
+          btn.textContent = "✓";
+          setTimeout(() => {
+            btn.classList.remove("copied");
+            btn.textContent = "🔗";
+          }, 1500);
+        }).catch(() => {
+          // Fallback
+          const ta = document.createElement("textarea");
+          ta.value = url;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          btn.classList.add("copied");
+          btn.textContent = "✓";
+          setTimeout(() => {
+            btn.classList.remove("copied");
+            btn.textContent = "🔗";
+          }, 1500);
+        });
+      }
+
       function escapeHtml(s) {
         const d = document.createElement("div");
         d.textContent = s;
@@ -1403,10 +1834,6 @@
           .replace(/>/g, "&gt;")
           .replace(/\r\n/g, " ")
           .replace(/[\r\n]/g, " ");
-      }
-
-      function openLink(url) {
-        if (url) window.open(url, "_blank", "noopener,noreferrer");
       }
 
       function resolveHeat(d) {
@@ -1469,64 +1896,389 @@
           document.getElementById("feed-view").classList.add("active");
           renderCards();
         }
+        saveUrlState();
       }
 
-      // 词频分析功能
+      // ── Skeleton HTML ──
+      function skeletonHtml(count = 6) {
+        let html = "";
+        for (let i = 0; i < count; i++) {
+          html += `
+          <div class="skeleton-card">
+            <div class="skeleton-meta">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+            </div>
+            <div class="skeleton-line skeleton-title"></div>
+            <div class="skeleton-line skeleton-desc"></div>
+            <div class="skeleton-line skeleton-desc skeleton-desc"></div>
+            <div class="skeleton-tags">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+            </div>
+          </div>`;
+        }
+        return html;
+      }
+
+      // ── Filter Cards (expanded search) ──
+      function filterCards() {
+        searchQuery = document
+          .getElementById("search-input")
+          .value.toLowerCase()
+          .trim();
+        visibleCount = PAGE_SIZE;
+        renderCards();
+        saveUrlState();
+      }
+
+      function getFilteredItems() {
+        return DATA.filter((d) => {
+          if (activeTab !== "all" && d.type !== activeTab) return false;
+          if (
+            !activeFilters.has("all") &&
+            !(d.tags || []).some((t) => activeFilters.has(t))
+          )
+            return false;
+          if (searchQuery) {
+            const hay = (
+              (d.title || "") + " " +
+              (d.desc || "") + " " +
+              (d.tags || []).join(" ") + " " +
+              (d.venue || "") + " " +
+              (d.link || "")
+            ).toLowerCase();
+            if (!hay.includes(searchQuery)) return false;
+          }
+          return true;
+        });
+      }
+
+      function renderCards() {
+        const grid = document.getElementById("card-grid");
+        const items = getFilteredItems();
+        const countEl = document.getElementById("count-label");
+        const paginationEl = document.getElementById("pagination");
+        const loadMoreBtn = document.getElementById("btn-load-more");
+        const paginationInfo = document.getElementById("pagination-info");
+
+        if (items.length === 0) {
+          countEl.textContent = "显示 0 条内容";
+          const nPaper = DATA.filter((d) => d.type === "paper").length;
+          let emptyMsg =
+            "没有找到匹配内容 · 可尝试「抓取最新」、点选「全部」主题筛选项，或清空搜索框";
+          if (activeTab === "paper" && DATA.length > 0 && nPaper === 0) {
+            emptyMsg +=
+              " · 当前数据里没有论文条目（多为 arXiv 短时限流），稍后再点「抓取最新」或用「全部」浏览资讯";
+          } else if (activeTab === "paper" && DATA.length === 0) {
+            emptyMsg += " · 列表尚未加载成功，请先点「抓取最新」";
+          }
+          grid.innerHTML = `<div class="empty">${emptyMsg}</div>`;
+          paginationEl.hidden = true;
+          return;
+        }
+
+        const showCount = Math.min(visibleCount, items.length);
+        const visibleItems = items.slice(0, showCount);
+
+        countEl.innerHTML = `显示 ${showCount} / ${items.length} 条内容<span class="sort-hint">顺序：加权热度（1–999）降序，同分按日期。热度 = 渠道底分 + log 压缩后的赞/评/星 + 稿龄 + 工程向主题加成；并可查看接口 <code style="font-size:10px;font-family:var(--font-mono)">heat_breakdown</code>。列表保证至少约 14 篇论文占位，避免全是帖子。</span>`;
+
+        grid.innerHTML = visibleItems
+          .map((d, idx) => {
+            const link = escapeAttr(d.link || "#");
+            const rawTitle = (d.title || "").trim();
+            const rawDesc = (d.desc || "").trim();
+            const mainTitle = escapeHtml(rawTitle);
+            const mainDesc = escapeHtml(rawDesc);
+            const venue = escapeHtml(d.venue || "");
+            const dateRel = relativeTime(d.date || "");
+            const dateFull = escapeAttr(d.date || "");
+            const heatN = resolveHeat(d);
+            const heatDisplay = heatN !== null ? String(heatN) : "—";
+            const heatHtml = `<span class="heat-chip${
+              heatN === null || heatN <= 1 ? " heat-chip--zero" : ""
+            }" title="${escapeAttr(buildHeatTooltip(d))}"><span class="heat-chip-lbl">热度</span>${heatDisplay}</span>`;
+            const tags = (d.tags || [])
+              .map((t) => `<span class="tag">${escapeHtml(t)}</span>`)
+              .join("");
+            const delay = `${Math.min(idx * 0.02, 0.2)}s`;
+            return `
+    <article class="card" style="animation-delay:${delay}">
+      <button type="button" class="copy-link-btn" data-url="${link}" title="复制链接" aria-label="复制链接">🔗</button>
+      <a class="card-link" href="${link}" target="_blank" rel="noopener noreferrer">
+        <div class="card-meta">
+          <span class="badge ${badgeClass(d.type)}">${badgeLabel(d.type)}</span>
+          <span class="venue-label">${venue}</span>
+          ${heatHtml}
+          <span class="date-label" title="${dateFull}">${dateRel}</span>
+        </div>
+        <div class="card-title">${mainTitle}</div>
+        <div class="card-desc">${mainDesc}</div>
+        <div class="card-footer">
+          ${tags}
+        </div>
+      </a>
+    </article>`;
+          })
+          .join("");
+
+        // Copy link buttons
+        grid.querySelectorAll(".copy-link-btn").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            copyLink(btn.dataset.url, btn);
+          });
+        });
+
+        // Pagination
+        if (showCount < items.length) {
+          paginationEl.hidden = false;
+          loadMoreBtn.disabled = false;
+          paginationInfo.textContent = `已展示 ${showCount} / ${items.length}`;
+        } else {
+          paginationEl.hidden = true;
+        }
+      }
+
+      function loadMore() {
+        visibleCount += PAGE_LOAD_MORE;
+        renderCards();
+      }
+
+      // ── Back to Top ──
+      function initBackToTop() {
+        const btn = document.getElementById("back-to-top");
+        if (!btn) return;
+        let ticking = false;
+        window.addEventListener("scroll", () => {
+          if (!ticking) {
+            requestAnimationFrame(() => {
+              btn.classList.toggle("visible", window.scrollY > window.innerHeight * 0.8);
+              ticking = false;
+            });
+            ticking = true;
+          }
+        });
+        btn.addEventListener("click", () => {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      }
+
+      function setLoading(on) {
+        const pulse = document.getElementById("pulse");
+        const b = document.getElementById("btn-refresh");
+        const grid = document.getElementById("card-grid");
+        pulse.classList.toggle("loading", on);
+        b.disabled = on;
+        if (on) {
+          grid.innerHTML = skeletonHtml(6);
+        }
+      }
+
+      function renderDigestKeywords(ins) {
+        const panel = document.getElementById("digest-unified-panel");
+        const chips = document.getElementById("insights-keyword-chips");
+        const note = document.getElementById("insights-note");
+        if (!panel || !chips || !note) return;
+        if (!DATA.length) {
+          panel.hidden = true;
+          return;
+        }
+        panel.hidden = false;
+        if (!ins || ins.empty) {
+          chips.innerHTML = "";
+          note.textContent = "";
+          return;
+        }
+        const kws = ins.keywords || [];
+        chips.innerHTML = kws
+          .slice(0, 16)
+          .map(
+            (k) =>
+              `<button type="button" class="ins-chip" data-w="${escapeAttr(k.word)}">${escapeHtml(k.word)} <small>${escapeHtml(String(k.count))}</small></button>`,
+          )
+          .join("");
+        chips.querySelectorAll(".ins-chip").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document.getElementById("search-input").value = btn.dataset.w || "";
+            filterCards();
+          });
+        });
+        note.textContent =
+          "「分析」Tab 可按数据库历史做词云与趋势。";
+      }
+
+      async function loadWeeklyDigest() {
+        const body = document.getElementById("weekly-digest-body");
+        const meta = document.getElementById("weekly-digest-meta");
+        if (!body) return;
+        body.innerHTML = '<span class="digest-spinner"></span>正在请求中文周评（若已配置 LLM 可能需要十余秒）…';
+        if (meta) meta.textContent = "";
+        try {
+          const r = await fetch(
+            `${API_BASE}/api/weekly-digest?_=${Date.now()}`,
+            {
+              cache: "no-store",
+            },
+          );
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const d = await r.json();
+          if (d.text) {
+            body.textContent = d.text;
+          } else {
+            body.textContent = "暂无综述（列表为空或未就绪）。";
+          }
+          if (meta) {
+            const parts = [];
+            if (d.from_llm) parts.push("LLM 生成");
+            else parts.push("统计兜底（未配置或调用失败）");
+            if (d.cached) parts.push("命中缓存");
+            if (d.generated_at) parts.push(d.generated_at);
+            meta.textContent = parts.join(" · ");
+          }
+        } catch (e) {
+          body.textContent = "综述加载失败：" + (e.message || e);
+        }
+      }
+
+      async function loadFeed(refresh) {
+        setLoading(true);
+        visibleCount = PAGE_SIZE;
+        const errEl = document.getElementById("err-hint");
+        errEl.hidden = true;
+        const status = document.getElementById("fetch-status");
+        status.textContent = refresh ? "正在从各源拉取最新条目…" : "正在加载…";
+        try {
+          const url = refresh
+            ? `${API_BASE}/api/feed/refresh`
+            : `${API_BASE}/api/feed?_=${Date.now()}`;
+          const init = refresh
+            ? { method: "POST", cache: "no-store" }
+            : { cache: "no-store" };
+          const r = await fetch(url, init);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          DATA = data.items || [];
+          const at = data.fetched_at ? new Date(data.fetched_at) : new Date();
+          const timeStr = at.toLocaleString("zh-CN", { hour12: false });
+          const schemaNote =
+            data.schema_version != null
+              ? ` · 接口版本 v${data.schema_version}`
+              : "";
+          status.textContent = `共 ${DATA.length} 条 · 更新于 ${timeStr}${
+            refresh ? " · 已刷新" : ""
+          } · 原文为主 · 已按热度排序${schemaNote}`;
+          const anyHeat = DATA.some((d) => resolveHeat(d) !== null);
+          const parts = [];
+          if (DATA.length > 0 && !anyHeat) {
+            parts.push(
+              "数据里没有热度字段：① 终端运行 uvicorn，浏览器地址栏输入 http://127.0.0.1:8767/（不要双击本地 .html）。② 端口若不是 8767，把本页脚本里 file 协议对应的 API 地址改成你的端口。③ Cmd+Shift+R 强制刷新后点「抓取最新」。",
+            );
+          }
+          const summary = data.fetch_summary || null;
+          if (summary?.message) {
+            if (summary.status === "partial" || summary.status === "degraded") {
+              const errorText = data.errors && data.errors.length
+                ? `：${data.errors.slice(0, 2).join("；")}`
+                : "";
+              parts.push(`部分来源未拉取，${summary.message}${errorText}`);
+            } else if (summary.sources?.unchanged || summary.cache?.used) {
+              parts.push(summary.message);
+            }
+          } else if (data.errors && data.errors.length) {
+            parts.push("部分来源未拉取: " + data.errors.slice(0, 2).join("；"));
+          }
+          if (parts.length) {
+            errEl.textContent = parts.join(" ");
+            errEl.hidden = false;
+          } else {
+            errEl.textContent = "";
+            errEl.hidden = true;
+          }
+          renderDigestKeywords(data.insights);
+          renderCards();
+          loadWeeklyDigest();
+        } catch (e) {
+          status.textContent =
+            "加载失败：" +
+            (e.message || e) +
+            " · 请确认已启动本地服务 (uvicorn)";
+          const du = document.getElementById("digest-unified-panel");
+          if (du) du.hidden = true;
+          const wb = document.getElementById("weekly-digest-body");
+          if (wb) wb.textContent = "列表加载失败，无法生成本期速览。";
+          const wm = document.getElementById("weekly-digest-meta");
+          if (wm) wm.textContent = "";
+          const grid = document.getElementById("card-grid");
+          grid.innerHTML = '<div class="empty">加载失败，请刷新页面重试</div>';
+          document.getElementById("pagination").hidden = true;
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // ── Analytics ──
+      let wordCloudData = [];
+
+      function redrawWordCloud() {
+        if (wordCloudData.length > 0) {
+          drawWordCloud(wordCloudData);
+        }
+      }
+
       async function loadAnalytics() {
         const days = document.getElementById("analytics-days").value;
         const type = document.getElementById("analytics-type").value;
         const contentEl = document.getElementById("analytics-content");
 
-        contentEl.innerHTML = '<div class="loading-text">正在分析数据...</div>';
+        contentEl.innerHTML = `
+          <div class="loading-text">
+            <span class="digest-spinner"></span>正在分析数据…
+          </div>`;
 
         try {
           const typeQ =
             type && String(type).trim()
               ? `&article_type=${encodeURIComponent(type)}`
               : "";
-          const [freqRes, trendRes, entitiesRes, emergenceRes, convRes] =
-            await Promise.all([
-            fetch(
-              `${API_BASE}/api/analytics/word-freq?days=${days}${typeQ}&top_k=50`,
-            ),
-            fetch(
-              `${API_BASE}/api/analytics/trending?recent_days=7&compare_days=${days}&top_k=15`,
-            ),
-            fetch(
-              `${API_BASE}/api/analytics/entities?recent_days=7&compare_days=${days}&top_k=18`,
-            ),
-            fetch(
-              `${API_BASE}/api/analytics/emergence?recent_days=7&compare_days=${days}&top_k=12&min_mentions=1`,
-            ),
-            fetch(
-              `${API_BASE}/api/analytics/convergence?days=${days}&min_source_types=2&top_k=10`,
-            ),
-          ]);
-
-          if (!freqRes.ok) throw new Error("词频分析请求失败");
-
-          const freqData = await freqRes.json();
-          const trendData = trendRes.ok
-            ? await trendRes.json()
-            : { trending: [] };
-          const entitiesData = entitiesRes.ok
-            ? await entitiesRes.json()
-            : { entities: [] };
-          const emergenceData = emergenceRes.ok
-            ? await emergenceRes.json()
-            : { emerged: [] };
-          const convData = convRes.ok ? await convRes.json() : { cards: [] };
+          // 使用聚合端点，一次请求返回全部数据（DB 查询从 5 次降为 2 次）
+          const res = await fetch(
+            `${API_BASE}/api/analytics/aggregate?days=${days}${typeQ}&top_k=50`
+          );
+          if (!res.ok) throw new Error("聚合分析请求失败");
+          const agg = await res.json();
 
           renderAnalytics(
-            freqData.result,
-            trendData.trending,
-            entitiesData.entities || [],
-            emergenceData.emerged || [],
-            convData.cards || [],
+            agg.word_freq,
+            agg.trending || [],
+            agg.entities || [],
+            agg.emergence || [],
+            agg.convergence || [],
+            { recent_count: agg.recent_count, historical_count: agg.historical_count },
           );
         } catch (e) {
           contentEl.innerHTML = `<div class="empty-analytics">加载失败：${e.message}</div>`;
         }
+      }
+
+      function makeCollapsible(title, contentHtml, expanded = false) {
+        const id = "collapsible-" + Math.random().toString(36).slice(2, 8);
+        return `
+          <div class="trending-section" style="margin-bottom:1.5rem">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+              <div class="section-title" style="margin-bottom:0">${title}</div>
+              <button type="button" class="analytics-section-toggle" data-target="${id}" aria-expanded="${expanded}">
+                ${expanded ? "收起 ▲" : "展开 ▼"}
+              </button>
+            </div>
+            <div class="analytics-collapsible ${expanded ? 'expanded' : ''}" id="${id}">
+              <div class="analytics-collapsible-inner">
+                ${contentHtml}
+              </div>
+            </div>
+          </div>`;
       }
 
       function renderAnalytics(data, trending, entities, emerged, convergence) {
@@ -1545,6 +2297,9 @@
           word_frequency,
           tag_cooccurrence,
         } = data;
+
+        // Save for resize redraw
+        wordCloudData = word_frequency.slice(0, 40);
 
         const statsHtml = `
           <div class="stats-grid">
@@ -1571,6 +2326,7 @@
           <div class="wordcloud-section">
             <div class="section-title">热词云图</div>
             <canvas id="wordcloud-canvas" class="wordcloud-canvas"></canvas>
+            ${(!word_frequency || word_frequency.length === 0) ? '<div class="empty-analytics" style="padding:2rem">暂无词频数据</div>' : ''}
           </div>
         `;
 
@@ -1582,8 +2338,8 @@
                 .slice(0, 30)
                 .map(
                   ([word, count]) => `
-                <div class="word-item" onclick="searchByWord('${word}')">
-                  <span class="word-text">${word}</span>
+                <div class="word-item" onclick="searchByWord('${escapeAttr(word)}')">
+                  <span class="word-text">${escapeHtml(word)}</span>
                   <span class="word-count">${count}</span>
                 </div>
               `,
@@ -1593,29 +2349,27 @@
           </div>
         `;
 
-        const trendingHtml =
-          trending && trending.length > 0
-            ? `
-          <div class="trending-section">
-            <div class="section-title">近期上升话题 (vs 历史均值)</div>
-            <div class="trending-list">
-              ${trending
-                .map(
-                  (t) => `
-                <div class="trending-item">
-                  <span>${t.word}</span>
-                  <span class="trending-up">↑${t.trend}x</span>
-                </div>
-              `,
-                )
-                .join("")}
-            </div>
-          </div>
-        `
-            : "";
+        const trendingHtml = trending && trending.length > 0
+          ? makeCollapsible(
+              "近期上升话题 (vs 历史均值)",
+              `<div class="trending-list">
+                ${trending
+                  .map(
+                    (t) => `
+                  <div class="trending-item">
+                    <span>${escapeHtml(t.word)}</span>
+                    <span class="${t.is_new ? 'trending-new' : 'trending-up'}">${t.is_new ? '新词' : `↑${t.trend}x`}</span>
+                  </div>
+                `,
+                  )
+                  .join("")}
+              </div>`,
+              true,
+            )
+          : "";
 
         const entitiesHtml = `
-          <div class="trending-section">
+          <div class="trending-section" style="margin-top:2rem">
             <div class="section-title">命名实体热度（模型/技术/工具/机构/Benchmark）</div>
             ${
               entities && entities.length
@@ -1633,9 +2387,9 @@
                       const links = top
                         .map(
                           (a) =>
-                            `<button type="button" class="signal-link" onclick="openLink('${escapeAttr(a.link || '')}')">
+                            `<a class="signal-link" href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener noreferrer">
                               <span>证据</span><small>${escapeHtml((a.type || '').toUpperCase())} · heat ${escapeHtml(String(a.heat ?? ''))}</small>
-                            </button>`,
+                            </a>`,
                         )
                         .join("");
                       return `<div class="signal-card">
@@ -1646,9 +2400,9 @@
                           </div>
                         </div>
                         <div class="signal-meta">
-                          <span class=\"signal-pill\">${escapeHtml(e.category || '?')}</span>
-                          <span class=\"signal-pill\">mentions ${escapeHtml(String(e.mention_count ?? 0))}</span>
-                          <span class=\"signal-pill\">${escapeHtml(sources || 'sources ?')}</span>
+                          <span class="signal-pill">${escapeHtml(e.category || '?')}</span>
+                          <span class="signal-pill">mentions ${escapeHtml(String(e.mention_count ?? 0))}</span>
+                          <span class="signal-pill">${escapeHtml(sources || 'sources ?')}</span>
                         </div>
                         <div class="signal-links">${links}</div>
                       </div>`;
@@ -1660,88 +2414,82 @@
           </div>
         `;
 
-        const emergenceHtml = `
-          <div class="trending-section">
-            <div class="section-title">涌现信号（近期首次出现/突然升温的实体）</div>
-            ${
-              emerged && emerged.length
-                ? `<div class="signal-grid">
-                  ${emerged
-                    .slice(0, 10)
-                    .map((e) => {
-                      const top = (e.top_articles || []).slice(0, 2);
-                      const links = top
-                        .map(
-                          (a) =>
-                            `<button type="button" class="signal-link" onclick="openLink('${escapeAttr(a.link || '')}')">
-                              <span>证据</span><small>${escapeHtml((a.type || '').toUpperCase())} · heat ${escapeHtml(String(a.heat ?? ''))}</small>
-                            </button>`,
-                        )
-                        .join("");
-                      const pill = e.is_new ? "signal-pill signal-pill--good" : "signal-pill";
-                      return `<div class="signal-card">
-                        <div class="signal-head">
-                          <div class="signal-name">${escapeHtml(e.display || e.id || '')}</div>
-                          <div class="signal-meta">
-                            <span class="${pill}">${e.is_new ? "NEW" : "HOT"}</span>
-                          </div>
-                        </div>
+        const emergenceHtml = emerged && emerged.length > 0
+          ? makeCollapsible(
+              "涌现信号（近期首次出现/突然升温的实体）",
+              `<div class="signal-grid">
+                ${emerged
+                  .slice(0, 10)
+                  .map((e) => {
+                    const top = (e.top_articles || []).slice(0, 2);
+                    const links = top
+                      .map(
+                        (a) =>
+                          `<a class="signal-link" href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener noreferrer">
+                            <span>证据</span><small>${escapeHtml((a.type || '').toUpperCase())} · heat ${escapeHtml(String(a.heat ?? ''))}</small>
+                          </a>`,
+                      )
+                      .join("");
+                    const pill = e.is_new ? "signal-pill signal-pill--good" : "signal-pill";
+                    return `<div class="signal-card">
+                      <div class="signal-head">
+                        <div class="signal-name">${escapeHtml(e.display || e.id || '')}</div>
                         <div class="signal-meta">
-                          <span class="signal-pill">${escapeHtml(e.category || '?')}</span>
-                          <span class="signal-pill">mentions ${escapeHtml(String(e.mention_count ?? 0))}</span>
-                          <span class="signal-pill">score ${escapeHtml(String(e.emergence_score ?? ''))}</span>
+                          <span class="${pill}">${e.is_new ? "NEW" : "HOT"}</span>
                         </div>
-                        <div class="signal-links">${links}</div>
-                      </div>`;
-                    })
-                    .join("")}
-                </div>`
-                : `<div class="empty-analytics">暂无涌现信号（可能是窗口内数据较少或实体未补填）。</div>`
-            }
-          </div>
-        `;
+                      </div>
+                      <div class="signal-meta">
+                        <span class="signal-pill">${escapeHtml(e.category || '?')}</span>
+                        <span class="signal-pill">mentions ${escapeHtml(String(e.mention_count ?? 0))}</span>
+                        <span class="signal-pill">score ${escapeHtml(String(e.emergence_score ?? ''))}</span>
+                      </div>
+                      <div class="signal-links">${links}</div>
+                    </div>`;
+                  })
+                  .join("")}
+              </div>`,
+              true,
+            )
+          : "";
 
-        const convergenceHtml = `
-          <div class="trending-section">
-            <div class="section-title">收敛信号卡（论文 → 实现 → 讨论）</div>
-            ${
-              convergence && convergence.length
-                ? `<div class="signal-grid">
-                  ${convergence
-                    .slice(0, 10)
-                    .map((c) => {
-                      const st = (c.source_types || []).join(" · ") || "?";
-                      const ev = c.evidence || {};
-                      const links = Object.keys(ev)
-                        .slice(0, 3)
-                        .map((k) => {
-                          const a = ev[k] || {};
-                          const href = a.link || c.arxiv_url || "";
-                          return `<button type="button" class="signal-link" onclick="openLink('${escapeAttr(href)}')">
-                              <span>${escapeHtml(k)}</span><small>heat ${escapeHtml(String(a.heat ?? ""))}</small>
-                            </button>`;
-                        })
-                        .join("");
+        const convergenceHtml = convergence && convergence.length > 0
+          ? makeCollapsible(
+              "收敛信号卡（论文 → 实现 → 讨论）",
+              `<div class="signal-grid">
+                ${convergence
+                  .slice(0, 10)
+                  .map((c) => {
+                    const st = (c.source_types || []).join(" · ") || "?";
+                    const ev = c.evidence || {};
+                    const links = Object.keys(ev)
+                      .slice(0, 3)
+                      .map((k) => {
+                        const a = ev[k] || {};
+                        const href = a.link || c.arxiv_url || "";
+                        return `<a class="signal-link" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">
+                            <span>${escapeHtml(k)}</span><small>heat ${escapeHtml(String(a.heat ?? ""))}</small>
+                          </a>`;
+                      })
+                      .join("");
 
-                      return `<div class="signal-card">
-                        <div class="signal-head">
-                          <div class="signal-name">${escapeHtml((c.title || "").slice(0, 72))}</div>
-                          <div class="signal-meta"><span class="signal-pill signal-pill--good">score ${escapeHtml(String(c.convergence_score ?? ""))}</span></div>
-                        </div>
-                        <div class="signal-meta">
-                          <span class="signal-pill">${escapeHtml(st)}</span>
-                          <span class="signal-pill">arXiv ${escapeHtml(String(c.arxiv_id || ""))}</span>
-                          <span class="signal-pill">total_heat ${escapeHtml(String(c.total_heat ?? ""))}</span>
-                        </div>
-                        <div class="signal-links">${links}</div>
-                      </div>`;
-                    })
-                    .join("")}
-                </div>`
-                : `<div class="empty-analytics">当前窗口内暂无收敛卡。说明：目前只从条目 link 自动提取 arXiv ID，社区帖与 repo 往往不直接带 arXiv 链接，因此命中率会偏低（后续可做 README/标题里的 arXiv 链接抽取提升）。</div>`
-            }
-          </div>
-        `;
+                    return `<div class="signal-card">
+                      <div class="signal-head">
+                        <div class="signal-name">${escapeHtml((c.title || "").slice(0, 72))}</div>
+                        <div class="signal-meta"><span class="signal-pill signal-pill--good">score ${escapeHtml(String(c.convergence_score ?? ""))}</span></div>
+                      </div>
+                      <div class="signal-meta">
+                        <span class="signal-pill">${escapeHtml(st)}</span>
+                        <span class="signal-pill">arXiv ${escapeHtml(String(c.arxiv_id || ""))}</span>
+                        <span class="signal-pill">total_heat ${escapeHtml(String(c.total_heat ?? ""))}</span>
+                      </div>
+                      <div class="signal-links">${links}</div>
+                    </div>`;
+                  })
+                  .join("")}
+              </div>`,
+              false,
+            )
+          : "";
 
         contentEl.innerHTML =
           statsHtml +
@@ -1751,6 +2499,21 @@
           entitiesHtml +
           emergenceHtml +
           convergenceHtml;
+
+        // Init collapsible toggles
+        contentEl.querySelectorAll(".analytics-section-toggle").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const target = document.getElementById(btn.dataset.target);
+            if (!target) return;
+            const isExpanded = target.classList.contains("expanded");
+            target.classList.toggle("expanded");
+            btn.textContent = isExpanded ? "展开 ▼" : "收起 ▲";
+            btn.setAttribute("aria-expanded", String(!isExpanded));
+          });
+        });
+
+        // Fix signal-link click (now <a> tags)
+        // Remove the old onclick handlers since we use proper <a> tags now
 
         setTimeout(() => drawWordCloud(word_frequency.slice(0, 40)), 0);
       }
@@ -1775,7 +2538,14 @@
         ctx.fillStyle = getComputedStyle(canvas).backgroundColor;
         ctx.fillRect(0, 0, width, height);
 
-        if (!words || words.length === 0) return;
+        if (!words || words.length === 0) {
+          ctx.fillStyle = getComputedStyle(canvas).color;
+          ctx.font = '14px var(--font-body)';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("暂无数据", centerX, centerY);
+          return;
+        }
 
         const maxCount = words[0][1];
         const minCount = words[words.length - 1][1];
@@ -1896,235 +2666,12 @@
             setFilterAllActive();
           }
         }
+        visibleCount = PAGE_SIZE;
         renderCards();
+        saveUrlState();
       }
 
-      function filterCards() {
-        searchQuery = document
-          .getElementById("search-input")
-          .value.toLowerCase()
-          .trim();
-        renderCards();
-      }
-
-      function renderCards() {
-        const grid = document.getElementById("card-grid");
-        const items = DATA.filter((d) => {
-          if (activeTab !== "all" && d.type !== activeTab) return false;
-          if (
-            !activeFilters.has("all") &&
-            !(d.tags || []).some((t) => activeFilters.has(t))
-          )
-            return false;
-          if (searchQuery) {
-            const hay = ((d.title || "") + " " + (d.desc || "")).toLowerCase();
-            if (!hay.includes(searchQuery)) return false;
-          }
-          return true;
-        });
-        const countEl = document.getElementById("count-label");
-        if (items.length === 0) {
-          countEl.textContent = "显示 0 条内容";
-          const nPaper = DATA.filter((d) => d.type === "paper").length;
-          let emptyMsg =
-            "没有找到匹配内容 · 可尝试「抓取最新」、点选「全部」主题筛选项，或清空搜索框";
-          if (activeTab === "paper" && DATA.length > 0 && nPaper === 0) {
-            emptyMsg +=
-              " · 当前数据里没有论文条目（多为 arXiv 短时限流），稍后再点「抓取最新」或用「全部」浏览资讯";
-          } else if (activeTab === "paper" && DATA.length === 0) {
-            emptyMsg += " · 列表尚未加载成功，请先点「抓取最新」";
-          }
-          grid.innerHTML = `<div class="empty">${emptyMsg}</div>`;
-          return;
-        }
-        countEl.innerHTML = `显示 ${items.length} 条内容<span class="sort-hint">顺序：加权热度（1–999）降序，同分按日期。热度 = 渠道底分 + log 压缩后的赞/评/星 + 稿龄 + 工程向主题加成；并可查看接口 <code style="font-size:10px;font-family:var(--font-mono)">heat_breakdown</code>。列表保证至少约 14 篇论文占位，避免全是帖子。</span>`;
-        grid.innerHTML = items
-          .map((d) => {
-            const link = escapeHtml(d.link || "#");
-            const rawTitle = (d.title || "").trim();
-            const rawDesc = (d.desc || "").trim();
-            const mainTitle = escapeHtml(rawTitle);
-            const mainDesc = escapeHtml(rawDesc);
-            const venue = escapeHtml(d.venue || "");
-            const date = escapeHtml(d.date || "");
-            const heatN = resolveHeat(d);
-            const heatDisplay = heatN !== null ? String(heatN) : "—";
-            const heatHtml = `<span class="heat-chip${
-              heatN === null || heatN <= 1 ? " heat-chip--zero" : ""
-            }" title="${escapeAttr(buildHeatTooltip(d))}"><span class="heat-chip-lbl">热度</span>${heatDisplay}</span>`;
-            const tags = (d.tags || [])
-              .map((t) => `<span class="tag">${escapeHtml(t)}</span>`)
-              .join("");
-            return `
-    <article class="card" data-href="${link}">
-      <div class="card-meta">
-        <span class="badge ${badgeClass(d.type)}">${badgeLabel(d.type)}</span>
-        <span class="venue-label">${venue}</span>
-        ${heatHtml}
-        <span class="date-label">${date}</span>
-      </div>
-      <div class="card-title">${mainTitle}</div>
-      <div class="card-desc">${mainDesc}</div>
-      <div class="card-footer">
-        ${tags}
-      </div>
-    </article>`;
-          })
-          .join("");
-
-        grid.querySelectorAll(".card").forEach((card) => {
-          card.addEventListener("click", () => {
-            openLink(card.dataset.href);
-          });
-        });
-      }
-
-      function setLoading(on) {
-        const pulse = document.getElementById("pulse");
-        const b = document.getElementById("btn-refresh");
-        pulse.classList.toggle("loading", on);
-        b.disabled = on;
-      }
-
-      function renderDigestKeywords(ins) {
-        const panel = document.getElementById("digest-unified-panel");
-        const chips = document.getElementById("insights-keyword-chips");
-        const note = document.getElementById("insights-note");
-        if (!panel || !chips || !note) return;
-        if (!DATA.length) {
-          panel.hidden = true;
-          return;
-        }
-        panel.hidden = false;
-        if (!ins || ins.empty) {
-          chips.innerHTML = "";
-          note.textContent = "";
-          return;
-        }
-        const kws = ins.keywords || [];
-        chips.innerHTML = kws
-          .slice(0, 16)
-          .map(
-            (k) =>
-              `<button type="button" class="ins-chip" data-w="${escapeAttr(k.word)}">${escapeHtml(k.word)} <small>${escapeHtml(String(k.count))}</small></button>`,
-          )
-          .join("");
-        chips.querySelectorAll(".ins-chip").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            document.getElementById("search-input").value = btn.dataset.w || "";
-            filterCards();
-          });
-        });
-        note.textContent =
-          "「分析」Tab 可按数据库历史做词云与趋势。";
-      }
-
-      async function loadWeeklyDigest() {
-        const body = document.getElementById("weekly-digest-body");
-        const meta = document.getElementById("weekly-digest-meta");
-        if (!body) return;
-        body.textContent = "正在请求中文周评（若已配置 LLM 可能需要十余秒）…";
-        if (meta) meta.textContent = "";
-        try {
-          const r = await fetch(
-            `${API_BASE}/api/weekly-digest?_=${Date.now()}`,
-            {
-              cache: "no-store",
-            },
-          );
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const d = await r.json();
-          if (d.text) {
-            body.textContent = d.text;
-          } else {
-            body.textContent = "暂无综述（列表为空或未就绪）。";
-          }
-          if (meta) {
-            const parts = [];
-            if (d.from_llm) parts.push("LLM 生成");
-            else parts.push("统计兜底（未配置或调用失败）");
-            if (d.cached) parts.push("命中缓存");
-            if (d.generated_at) parts.push(d.generated_at);
-            meta.textContent = parts.join(" · ");
-          }
-        } catch (e) {
-          body.textContent = "综述加载失败：" + (e.message || e);
-        }
-      }
-
-      async function loadFeed(refresh) {
-        setLoading(true);
-        const errEl = document.getElementById("err-hint");
-        errEl.hidden = true;
-        const status = document.getElementById("fetch-status");
-        status.textContent = refresh ? "正在从各源拉取最新条目…" : "正在加载…";
-        try {
-          const url = refresh
-            ? `${API_BASE}/api/feed/refresh`
-            : `${API_BASE}/api/feed?_=${Date.now()}`;
-          const init = refresh
-            ? { method: "POST", cache: "no-store" }
-            : { cache: "no-store" };
-          const r = await fetch(url, init);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const data = await r.json();
-          DATA = data.items || [];
-          const at = data.fetched_at ? new Date(data.fetched_at) : new Date();
-          const timeStr = at.toLocaleString("zh-CN", { hour12: false });
-          const schemaNote =
-            data.schema_version != null
-              ? ` · 接口版本 v${data.schema_version}`
-              : "";
-          status.textContent = `共 ${DATA.length} 条 · 更新于 ${timeStr}${
-            refresh ? " · 已刷新" : ""
-          } · 原文为主 · 已按热度排序${schemaNote}`;
-          const anyHeat = DATA.some((d) => resolveHeat(d) !== null);
-          const parts = [];
-          if (DATA.length > 0 && !anyHeat) {
-            parts.push(
-              "数据里没有热度字段：① 终端运行 uvicorn，浏览器地址栏输入 http://127.0.0.1:8767/（不要双击本地 .html）。② 端口若不是 8767，把本页脚本里 file 协议对应的 API 地址改成你的端口。③ Cmd+Shift+R 强制刷新后点「抓取最新」。",
-            );
-          }
-          const summary = data.fetch_summary || null;
-          if (summary?.message) {
-            if (summary.status === "partial" || summary.status === "degraded") {
-              const errorText = data.errors && data.errors.length
-                ? `：${data.errors.slice(0, 2).join("；")}`
-                : "";
-              parts.push(`部分来源未拉取，${summary.message}${errorText}`);
-            } else if (summary.sources?.unchanged || summary.cache?.used) {
-              parts.push(summary.message);
-            }
-          } else if (data.errors && data.errors.length) {
-            parts.push("部分来源未拉取: " + data.errors.slice(0, 2).join("；"));
-          }
-          if (parts.length) {
-            errEl.textContent = parts.join(" ");
-            errEl.hidden = false;
-          } else {
-            errEl.textContent = "";
-            errEl.hidden = true;
-          }
-          renderDigestKeywords(data.insights);
-          renderCards();
-          loadWeeklyDigest();
-        } catch (e) {
-          status.textContent =
-            "加载失败：" +
-            (e.message || e) +
-            " · 请确认已启动本地服务 (uvicorn)";
-          const du = document.getElementById("digest-unified-panel");
-          if (du) du.hidden = true;
-          const wb = document.getElementById("weekly-digest-body");
-          if (wb) wb.textContent = "列表加载失败，无法生成本期速览。";
-          const wm = document.getElementById("weekly-digest-meta");
-          if (wm) wm.textContent = "";
-          renderCards();
-        } finally {
-          setLoading(false);
-        }
-      }
-
+      // ── Event Listeners ──
       document.querySelectorAll(".tab").forEach((t) => {
         t.addEventListener("click", () => switchTab(t.dataset.tab, t));
       });
@@ -2140,7 +2687,21 @@
       document
         .getElementById("btn-analyze")
         ?.addEventListener("click", loadAnalytics);
+      document
+        .getElementById("btn-load-more")
+        ?.addEventListener("click", loadMore);
 
+      // ── Word Cloud Resize ──
+      let resizeDebounce;
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeDebounce);
+        resizeDebounce = setTimeout(redrawWordCloud, 250);
+      });
+
+      // ── Init ──
+      initTheme();
+      initBackToTop();
+      restoreUrlState();
       loadFeed(false);
     </script>
   </body>

@@ -174,6 +174,7 @@ class ArxivFetcher(BaseFetcher):
                     "outcome": outcome,
                     "used_cache": used_any_cache,
                     "fetched_count": len(items),
+                    "not_modified": used_any_cache,
                     "topics": len(self.TOPIC_QUERIES),
                     "errors": len(errors),
                 },

@@ -11,12 +11,12 @@ from .github import GitHubFetcher
 from .hackernews import HackerNewsFetcher
 from .reddit import RedditFetcher
 from .lobsters import LobstersFetcher
-from .firecrawl import FirecrawlFetcher
 from .huggingface import HuggingFaceFetcher
+# FirecrawlFetcher 已从常规管道移除，保留为增强服务（services/firecrawl.py）
 
 __all__ = [
     "BaseFetcher",
-    "FetchResult", 
+    "FetchResult",
     "FetcherStats",
     "FetcherRegistry",
     "register_fetcher",

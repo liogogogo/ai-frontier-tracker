@@ -154,8 +154,8 @@ CONCEPT_NORM: Dict[str, str] = {
     "llama": "llama",
     "chatgpt": "chatgpt",
     "gpt-4": "gpt4",
+    "gpt4": "gpt4",
     "gpt-3": "gpt3",
-    "gpt4o": "gpt4",
 }
 
 # ─────────────────────────────────────────────
@@ -587,12 +587,17 @@ def get_trending_words(
         if g2 < 3.84:
             continue
 
-        trend_ratio = recent_freq / max(hist_freq, 1e-9)
+        is_new = hist_freq < 1e-9
+        trend_ratio = (
+            999.0 if is_new
+            else min(999.0, round(recent_freq / hist_freq, 1))
+        )
         trending.append({
             "word": _display_token(term),
             "recent_count": round(o11, 2),
             "historical_count": round(o21, 2),
-            "trend": round(trend_ratio, 2),
+            "is_new": is_new,
+            "trend": trend_ratio,
             "g2": round(g2, 1),
         })
 
@@ -817,58 +822,3 @@ def build_topic_cards(
             break
 
     return cards
-
-
-# ─────────────────────────────────────────────
-# Topic Cards：跨 source 的“高价值主题”输出
-# ─────────────────────────────────────────────
-
-def _normalize_term_to_tokens(term: str) -> List[str]:
-    """
-    将一个候选主题（词/短语）规范化为内部 token 列表。
-    - 单词：返回 [token]
-    - 短语：返回前 2 个 token（用于 bigram 证据匹配）
-    """
-    toks = tokenize_text(preprocess_text(term or ""))
-    return toks[:2]
-
-
-def _article_evidence_for_term(
-    articles: List[Dict],
-    term_tokens: List[str],
-    k: int,
-) -> List[Dict]:
-    """返回包含 term 的 top-k 文章证据（按 heat/新鲜度粗排）"""
-    if not term_tokens or not articles:
-        return []
-
-    is_bigram = len(term_tokens) >= 2
-    t1 = term_tokens[0]
-    t2 = term_tokens[1] if is_bigram else ""
-
-    hits: List[Dict] = []
-    for a in articles:
-        toks = _tokenize_article(a)
-        ok = False
-        if is_bigram:
-            # 连续 bigram 匹配
-            for i in range(len(toks) - 1):
-                if toks[i] == t1 and toks[i + 1] == t2:
-                    ok = True
-                    break
-        else:
-            ok = t1 in toks
-        if not ok:
-            continue
-
-        hits.append({
-            "title": a.get("title") or "",
-            "link": a.get("link") or "",
-            "venue": a.get("venue") or "",
-            "date": a.get("date") or "",
-            "type": a.get("type") or "",
-            "heat": int(a.get("heat") or 0),
-        })
-
-    hits.sort(key=lambda x: (x.get("heat", 0), x.get("date", "")), reverse=True)
-    return hits[: max(0, int(k or 0))]
